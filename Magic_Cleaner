@@ -1,0 +1,761 @@
+#!/bin/bash
+# Magic_Cleaner
+#
+# Made for 1337 Ubuntu PCs
+# Made by Bilal Rouane — 42 intra: brouane
+#
+# Policy:
+# - General cleanup: yes
+# - Python/dev caches: aggressive cache cleanup, but NEVER delete whole .venv
+# - VS Code: medium cleanup
+# - Chrome: cleanup only
+# - Docker: untouched
+# - Firefox / Brave / Discord / Spotify: purge-capable, with confirmation
+#
+# Default run:
+#   general + python + vscode + chrome + purge
+#
+# Useful examples:
+#   ./Magic_Cleaner
+#   ./Magic_Cleaner --dry-run
+#   ./Magic_Cleaner --analyze
+#   ./Magic_Cleaner --only vscode
+#   ./Magic_Cleaner --only purge
+#   ./Magic_Cleaner --no-purge
+#   ./Magic_Cleaner --purge-unused-apps --yes
+
+###############################################################################
+# SHELL / SAFETY
+###############################################################################
+
+set +e
+shopt -s nullglob
+
+###############################################################################
+# CONFIG
+###############################################################################
+
+SCRIPT_NAME="$(basename "$0")"
+
+# Default purge policy based on what you told me:
+DEFAULT_PURGE_FIREFOX=1
+DEFAULT_PURGE_BRAVE=1
+DEFAULT_PURGE_DISCORD=1
+DEFAULT_PURGE_SPOTIFY=1
+
+###############################################################################
+# FLAGS
+###############################################################################
+
+DRY_RUN=0
+PRINT_ITEMS=0
+ANALYZE=0
+NO_PURGE=0
+AUTO_YES=0
+PURGE_ONLY=0
+ONLY_CATEGORY=""
+
+###############################################################################
+# COLORS
+###############################################################################
+
+C_RESET="\033[0m"
+C_RED="\033[31m"
+C_GREEN="\033[32m"
+C_YELLOW="\033[33m"
+C_BLUE="\033[34m"
+C_ORANGE="\033[38;5;208m"
+C_CYAN="\033[36m"
+C_BOLD="\033[1m"
+C_MAGENTA="\033[38;5;213m"
+C_PURPLE="\033[38;5;141m"
+C_DIM="\033[2m"
+
+###############################################################################
+# STATS
+###############################################################################
+
+TOTAL_TARGETS=0
+TOTAL_FOUND_BYTES=0
+TOTAL_FREED_BYTES=0
+
+GENERAL_FOUND=0
+GENERAL_FREED=0
+
+PYTHON_FOUND=0
+PYTHON_FREED=0
+
+VSCODE_FOUND=0
+VSCODE_FREED=0
+
+CHROME_FOUND=0
+CHROME_FREED=0
+
+PURGE_FOUND=0
+PURGE_FREED=0
+
+CURRENT_CATEGORY=""
+
+###############################################################################
+# BANNER / HELP
+###############################################################################
+
+banner() {
+	# Purple -> cyan gradient
+	local G1="\033[38;5;129m"
+	local G2="\033[38;5;135m"
+	local G3="\033[38;5;141m"
+	local G4="\033[38;5;147m"
+	local G5="\033[38;5;153m"
+	local G6="\033[38;5;159m"
+	local DIM="\033[2m"
+
+	local art=(
+"███╗   ███╗ █████╗  ██████╗ ██╗ ██████╗     ██████╗██╗     ███████╗ █████╗ ███╗   ██╗███████╗██████╗ "
+"████╗ ████║██╔══██╗██╔════╝ ██║██╔════╝    ██╔════╝██║     ██╔════╝██╔══██╗████╗  ██║██╔════╝██╔══██╗"
+"██╔████╔██║███████║██║  ███╗██║██║         ██║     ██║     █████╗  ███████║██╔██╗ ██║█████╗  ██████╔╝"
+"██║╚██╔╝██║██╔══██║██║   ██║██║██║         ██║     ██║     ██╔══╝  ██╔══██║██║╚██╗██║██╔══╝  ██╔══██╗"
+"██║ ╚═╝ ██║██║  ██║╚██████╔╝██║╚██████╗    ╚██████╗███████╗███████╗██║  ██║██║ ╚████║███████╗██║  ██║"
+"╚═╝     ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝ ╚═════╝     ╚═════╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝"
+	)
+
+	local colors=("$G1" "$G2" "$G3" "$G4" "$G5" "$G6")
+	local subtitle="✦  Disk-space sorcery for 1337 Ubuntu PCs  ✦"
+	local credits="Made by Bilal Rouane  ·  42 intra: brouane"
+	local i
+
+	echo
+	for i in "${!art[@]}"; do
+		printf "  %b\n" "${colors[i]}${C_BOLD}${art[i]}${C_RESET}"
+	done
+	echo
+	printf "  %b\n" "${G6}${C_BOLD}$(printf "$subtitle")${C_RESET}"
+	printf "  %b\n" "${DIM}$(printf "$credits")${C_RESET}"
+	echo
+
+	if [ "$DRY_RUN" -eq 1 ]; then
+		printf "  %b\n\n" "${C_YELLOW}${C_BOLD}⚠ DRY-RUN mode: nothing will be deleted.${C_RESET}"
+	fi
+}
+
+usage() {
+	cat <<EOF
+Usage: $SCRIPT_NAME [options]
+
+Options:
+  --dry-run, -n          Show what would be deleted, do not delete
+  --print, -p            Print each target before deleting it
+  --analyze              Show biggest space consumers in your HOME before cleaning
+  --no-purge             Skip full-app purge stage
+  --purge-unused-apps    Run only the purge stage
+  --only CATEGORY        Run only one category:
+                         general | python | vscode | chrome | purge
+  --yes, -y              Auto-confirm purge prompts
+  --help, -h             Show this help
+
+Default run:
+  general + python + vscode + chrome + purge
+
+Examples:
+  $SCRIPT_NAME
+  $SCRIPT_NAME --dry-run
+  $SCRIPT_NAME --analyze
+  $SCRIPT_NAME --only vscode
+  $SCRIPT_NAME --only purge
+  $SCRIPT_NAME --purge-unused-apps --yes
+  $SCRIPT_NAME --no-purge
+EOF
+}
+
+###############################################################################
+# ARG PARSING
+###############################################################################
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--dry-run|-n)
+			DRY_RUN=1
+			;;
+		--print|-p)
+			PRINT_ITEMS=1
+			;;
+		--analyze)
+			ANALYZE=1
+			;;
+		--no-purge)
+			NO_PURGE=1
+			;;
+		--purge-unused-apps)
+			PURGE_ONLY=1
+			;;
+		--only)
+			shift
+			if [ -z "$1" ]; then
+				echo -e "${C_RED}--only requires a category${C_RESET}"
+				usage
+				exit 1
+			fi
+			ONLY_CATEGORY="$1"
+			;;
+		--yes|-y)
+			AUTO_YES=1
+			;;
+		--help|-h)
+			usage
+			exit 0
+			;;
+		*)
+			echo -e "${C_RED}Unknown option: $1${C_RESET}"
+			usage
+			exit 1
+			;;
+	esac
+	shift
+done
+
+case "$ONLY_CATEGORY" in
+	""|general|python|vscode|chrome|purge)
+		;;
+	*)
+		echo -e "${C_RED}Invalid category for --only: $ONLY_CATEGORY${C_RESET}"
+		usage
+		exit 1
+		;;
+esac
+
+###############################################################################
+# GENERIC HELPERS
+###############################################################################
+
+get_storage() {
+	local storage
+	storage=$(df -h "$HOME" | awk 'NR==2 {print $4}')
+	[ -z "$storage" ] && storage="0B"
+	echo "$storage"
+}
+
+human_size() {
+	local bytes="$1"
+	local units=("B" "K" "M" "G" "T")
+	local i=0
+	local value="$bytes"
+
+	if ! [[ "$bytes" =~ ^[0-9]+$ ]]; then
+		echo "0B"
+		return
+	fi
+
+	while [ "$value" -ge 1024 ] 2>/dev/null && [ "$i" -lt 4 ]; do
+		value=$((value / 1024))
+		i=$((i + 1))
+	done
+	echo "${value}${units[$i]}"
+}
+
+path_size_bytes() {
+	local path="$1"
+
+	[ ! -e "$path" ] && {
+		echo 0
+		return
+	}
+
+	du -sb "$path" 2>/dev/null | awk '{print $1}'
+}
+
+print_item() {
+	local label="$1"
+	local bytes="$2"
+	printf "  %-62s %10s\n" "$label" "$(human_size "$bytes")"
+}
+
+add_found_bytes() {
+	local bytes="$1"
+
+	TOTAL_FOUND_BYTES=$((TOTAL_FOUND_BYTES + bytes))
+
+	case "$CURRENT_CATEGORY" in
+		general) GENERAL_FOUND=$((GENERAL_FOUND + bytes)) ;;
+		python)  PYTHON_FOUND=$((PYTHON_FOUND + bytes)) ;;
+		vscode)  VSCODE_FOUND=$((VSCODE_FOUND + bytes)) ;;
+		chrome)  CHROME_FOUND=$((CHROME_FOUND + bytes)) ;;
+		purge)   PURGE_FOUND=$((PURGE_FOUND + bytes)) ;;
+	esac
+}
+
+add_freed_bytes() {
+	local bytes="$1"
+
+	TOTAL_FREED_BYTES=$((TOTAL_FREED_BYTES + bytes))
+
+	case "$CURRENT_CATEGORY" in
+		general) GENERAL_FREED=$((GENERAL_FREED + bytes)) ;;
+		python)  PYTHON_FREED=$((PYTHON_FREED + bytes)) ;;
+		vscode)  VSCODE_FREED=$((VSCODE_FREED + bytes)) ;;
+		chrome)  CHROME_FREED=$((CHROME_FREED + bytes)) ;;
+		purge)   PURGE_FREED=$((PURGE_FREED + bytes)) ;;
+	esac
+}
+
+remove_path() {
+	local path="$1"
+	local label="$2"
+	local bytes
+
+	[ -z "$path" ] && return 0
+	[ ! -e "$path" ] && return 0
+
+	bytes=$(path_size_bytes "$path")
+	[ -z "$bytes" ] && bytes=0
+	[ "$bytes" -eq 0 ] && return 0
+
+	TOTAL_TARGETS=$((TOTAL_TARGETS + 1))
+	add_found_bytes "$bytes"
+
+	if [ "$PRINT_ITEMS" -eq 1 ] || [ "$DRY_RUN" -eq 1 ]; then
+		print_item "$label" "$bytes"
+	fi
+
+	if [ "$DRY_RUN" -eq 1 ]; then
+		return 0
+	fi
+
+	/bin/rm -rf -- "$path" 2>/dev/null
+	add_freed_bytes "$bytes"
+	return 0
+}
+
+remove_glob() {
+	local label="$1"
+	shift
+	local path
+
+	for path in "$@"; do
+		remove_path "$path" "$label: $path"
+	done
+}
+
+remove_literal_dir_contents() {
+	# Remove only the contents of a directory, not the directory itself.
+	local dir="$1"
+	local label="$2"
+
+	[ ! -d "$dir" ] && return 0
+	remove_glob "$label" "$dir"/*
+}
+
+confirm_prompt() {
+	local prompt="$1"
+	local answer
+
+	if [ "$AUTO_YES" -eq 1 ] || [ "$DRY_RUN" -eq 1 ]; then
+		return 0
+	fi
+
+	printf "%s [y/N] " "$prompt"
+	read -r answer
+
+	case "$answer" in
+		y|Y|yes|YES)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
+
+purge_app_dir() {
+	local app_name="$1"
+	local app_path="$2"
+	local bytes
+
+	[ ! -e "$app_path" ] && return 0
+
+	bytes=$(path_size_bytes "$app_path")
+	[ -z "$bytes" ] && bytes=0
+	[ "$bytes" -eq 0 ] && return 0
+
+	echo -e "${C_YELLOW}\nAbout to fully remove ${app_name}:${C_RESET}"
+	echo "  $app_path"
+	echo "  Size: $(human_size "$bytes")"
+
+	if ! confirm_prompt "Continue?"; then
+		echo "  skipped ${app_name}"
+		return 0
+	fi
+
+	TOTAL_TARGETS=$((TOTAL_TARGETS + 1))
+	add_found_bytes "$bytes"
+
+	if [ "$PRINT_ITEMS" -eq 1 ] || [ "$DRY_RUN" -eq 1 ]; then
+		print_item "PURGE $app_name" "$bytes"
+	fi
+
+	if [ "$DRY_RUN" -eq 1 ]; then
+		return 0
+	fi
+
+	/bin/rm -rf -- "$app_path" 2>/dev/null
+	add_freed_bytes "$bytes"
+}
+
+###############################################################################
+# ANALYZE MODE
+###############################################################################
+
+analyze_section() {
+	local title="$1"
+	local target="$2"
+
+	[ ! -e "$target" ] && return 0
+
+	echo -e "${C_CYAN}== $title ==${C_RESET}"
+	du -sh "$target"/* 2>/dev/null | sort -hr | head -30
+	echo
+}
+
+run_analyze() {
+	echo -e "${C_BLUE}Analyzing biggest space consumers under $HOME ...${C_RESET}\n"
+
+	analyze_section "~/.var/app" "$HOME/.var/app"
+	analyze_section "~/.cache" "$HOME/.cache"
+	analyze_section "~/.config" "$HOME/.config"
+	analyze_section "~/.local/share" "$HOME/.local/share"
+
+	echo -e "${C_CYAN}== Top items in \$HOME ==${C_RESET}"
+	du -sh "$HOME"/* "$HOME"/.* 2>/dev/null | sort -hr | head -40
+	echo
+}
+
+###############################################################################
+# CATEGORY CLEANERS
+###############################################################################
+
+clean_general() {
+	CURRENT_CATEGORY="general"
+	echo -e "${C_ORANGE}-- [general] 42 / trash / cache / tmp --${C_RESET}"
+
+	# 42 / shell leftovers
+	remove_glob "42 cache" "$HOME"/.42*
+	remove_glob "zcompdump" "$HOME"/.zcompdump*
+
+	# Trash
+	remove_glob "trash files" "$HOME"/.local/share/Trash/files/*
+	remove_glob "trash info" "$HOME"/.local/share/Trash/info/*
+
+	# General cache
+	remove_glob "general cache" "$HOME"/.cache/*
+
+	# Thumbnails
+	remove_glob "thumbnails" "$HOME"/.cache/thumbnails/*
+	remove_glob "old thumbnails" "$HOME"/.thumbnails/*
+
+	# Desktop junk
+	remove_glob ".DS_Store" "$HOME"/Desktop/**/*/.DS_Store
+	remove_glob "Piscine Rules videos" "$HOME"/Desktop/Piscine\ Rules\ *.mp4
+	remove_glob "PLAY_ME.webloc" "$HOME"/Desktop/PLAY_ME.webloc
+
+	# /tmp files owned by user
+	# We enumerate both dry-run and real mode so stats are accurate.
+	local p
+	for p in /tmp/*; do
+		[ ! -e "$p" ] && continue
+		[ ! -O "$p" ] && continue
+		remove_path "$p" "tmp: $p"
+	done
+}
+
+clean_python() {
+	CURRENT_CATEGORY="python"
+	echo -e "${C_ORANGE}-- [python] package / dev caches --${C_RESET}"
+
+	# pip / Python
+	remove_glob "pip cache" "$HOME"/.cache/pip/*
+	remove_glob "pip cache dir" "$HOME"/.cache/pip
+	remove_glob "pip user cache" "$HOME"/.local/share/pip-cache/*
+	remove_glob "pytest cache" "$HOME"/.cache/pytest/*
+	remove_glob "mypy cache" "$HOME"/.cache/mypy/*
+	remove_glob "ruff cache" "$HOME"/.cache/ruff/*
+	remove_glob "uv cache" "$HOME"/.cache/uv/*
+
+	# JS package manager caches
+	remove_glob "npm cache" "$HOME"/.npm/_cacache/*
+	remove_glob "yarn cache" "$HOME"/.yarn/cache/*
+	remove_glob "pnpm cache" "$HOME"/.cache/pnpm/*
+	remove_glob "pnpm store cache" "$HOME"/.local/share/pnpm/store/*
+
+	# Rust / Ruby
+	remove_glob "cargo registry cache" "$HOME"/.cargo/registry/cache/*
+	remove_glob "cargo git cache" "$HOME"/.cargo/git/db/*
+	remove_glob "gem cache" "$HOME"/.gem/ruby/*/cache/*
+
+	# Optional safe Python project junk:
+	# remove per-project __pycache__ and .pytest_cache only under HOME,
+	# but avoid .venv directories entirely.
+	#
+	# If you want this disabled, remove this block.
+	while IFS= read -r -d '' d; do
+		remove_path "$d" "python __pycache__"
+	done < <(find "$HOME" \
+		-type d \
+		-name "__pycache__" \
+		-not -path "*/.venv/*" \
+		-not -path "$HOME/.cache/*" \
+		-print0 2>/dev/null)
+
+	while IFS= read -r -d '' d; do
+		remove_path "$d" "python .pytest_cache"
+	done < <(find "$HOME" \
+		-type d \
+		-name ".pytest_cache" \
+		-not -path "*/.venv/*" \
+		-print0 2>/dev/null)
+}
+
+clean_vscode() {
+	local base="$HOME/.var/app/com.visualstudio.code"
+
+	[ ! -d "$base" ] && return 0
+
+	CURRENT_CATEGORY="vscode"
+	echo -e "${C_ORANGE}-- [vscode] VS Code Flatpak cleanup --${C_RESET}"
+
+	# Flatpak cache
+	remove_literal_dir_contents "$base/cache" "vscode cache"
+
+	# Core caches
+	remove_literal_dir_contents "$base/config/Code/Cache" "vscode code cache"
+	remove_literal_dir_contents "$base/config/Code/CachedData" "vscode cached data"
+	remove_literal_dir_contents "$base/config/Code/GPUCache" "vscode gpu cache"
+	remove_literal_dir_contents "$base/config/Code/logs" "vscode logs"
+	remove_literal_dir_contents "$base/config/Code/Crashpad" "vscode crashpad"
+	remove_literal_dir_contents "$base/config/Code/Service Worker" "vscode service worker"
+	remove_literal_dir_contents "$base/config/Code/Local Storage" "vscode local storage"
+	remove_literal_dir_contents "$base/config/Code/Session Storage" "vscode session storage"
+	remove_literal_dir_contents "$base/config/Code/WebStorage" "vscode webstorage"
+	remove_literal_dir_contents "$base/config/Code/DawnWebGPUCache" "vscode dawn webgpu cache"
+	remove_literal_dir_contents "$base/config/Code/DawnGraphiteCache" "vscode dawn graphite cache"
+	remove_literal_dir_contents "$base/config/Code/Shared Dictionary" "vscode shared dictionary"
+
+	# Heavy real target on your machine
+	remove_literal_dir_contents \
+		"$base/config/Code/CachedExtensionVSIXs" \
+		"vscode CachedExtensionVSIXs"
+
+	# Medium cleanup rule: remove history, keep settings/keybindings/snippets
+	remove_literal_dir_contents \
+		"$base/config/Code/User/History" \
+		"vscode user history"
+
+	remove_literal_dir_contents \
+		"$base/config/Code/User/workspaceStorage" \
+		"vscode workspaceStorage"
+}
+
+clean_chrome_profile() {
+	local profile="$1"
+
+	[ ! -d "$profile" ] && return 0
+
+	remove_literal_dir_contents "$profile/Service Worker" "chrome service worker"
+	remove_literal_dir_contents "$profile/GPUCache" "chrome gpu cache"
+	remove_literal_dir_contents "$profile/DawnWebGPUCache" "chrome dawn webgpu cache"
+	remove_literal_dir_contents "$profile/DawnGraphiteCache" "chrome dawn graphite cache"
+	remove_literal_dir_contents "$profile/Code Cache" "chrome code cache"
+	remove_literal_dir_contents "$profile/Cache" "chrome cache"
+	remove_literal_dir_contents "$profile/Application Cache" "chrome application cache"
+	remove_literal_dir_contents "$profile/File System" "chrome file system"
+	remove_literal_dir_contents "$profile/blob_storage" "chrome blob storage"
+}
+
+clean_chrome() {
+	local base="$HOME/.var/app/com.google.Chrome"
+	local p
+
+	[ ! -d "$base" ] && return 0
+
+	CURRENT_CATEGORY="chrome"
+	echo -e "${C_ORANGE}-- [chrome] Chrome cleanup only --${C_RESET}"
+
+	# top-level flatpak cache
+	remove_literal_dir_contents "$base/cache" "chrome flatpak cache"
+
+	# top-level heavy junk we found on your machine
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/BrowserMetrics" \
+		"chrome BrowserMetrics"
+
+	remove_path \
+		"$base/config/google-chrome/BrowserMetrics-spare.pma" \
+		"chrome BrowserMetrics spare"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/component_crx_cache" \
+		"chrome component_crx_cache"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/optimization_guide_model_store" \
+		"chrome optimization model store"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/extensions_crx_cache" \
+		"chrome extensions_crx_cache"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/ShaderCache" \
+		"chrome ShaderCache"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/GrShaderCache" \
+		"chrome GrShaderCache"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/Crash Reports" \
+		"chrome Crash Reports"
+
+	remove_path \
+		"$base/config/google-chrome/CrashpadMetrics-active.pma" \
+		"chrome CrashpadMetrics-active.pma"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/segmentation_platform" \
+		"chrome segmentation_platform"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/OnDeviceHeadSuggestModel" \
+		"chrome OnDeviceHeadSuggestModel"
+
+	# clean all profiles dynamically, not just Profile 1..4
+	for p in "$base"/config/google-chrome/Default "$base"/config/google-chrome/Profile*; do
+		[ -d "$p" ] || continue
+		clean_chrome_profile "$p"
+	done
+}
+
+clean_purge() {
+	CURRENT_CATEGORY="purge"
+
+	[ "$NO_PURGE" -eq 1 ] && {
+		echo -e "${C_YELLOW}-- [purge] skipped due to --no-purge${C_RESET}"
+		return 0
+	}
+
+	echo -e "${C_ORANGE}-- [purge] full app purges --${C_RESET}"
+
+	if [ "$DEFAULT_PURGE_FIREFOX" -eq 1 ]; then
+		purge_app_dir "Firefox" "$HOME/.var/app/org.mozilla.firefox"
+	fi
+
+	if [ "$DEFAULT_PURGE_BRAVE" -eq 1 ]; then
+		purge_app_dir "Brave" "$HOME/.var/app/com.brave.Browser"
+	fi
+
+	if [ "$DEFAULT_PURGE_DISCORD" -eq 1 ]; then
+		purge_app_dir "Discord" "$HOME/.var/app/com.discordapp.Discord"
+	fi
+
+	if [ "$DEFAULT_PURGE_SPOTIFY" -eq 1 ]; then
+		purge_app_dir "Spotify" "$HOME/.var/app/com.spotify.Client"
+	fi
+}
+
+###############################################################################
+# RUNNERS
+###############################################################################
+
+run_only_category() {
+	case "$ONLY_CATEGORY" in
+		general) clean_general ;;
+		python)  clean_python ;;
+		vscode)  clean_vscode ;;
+		chrome)  clean_chrome ;;
+		purge)   clean_purge ;;
+	esac
+}
+
+run_default_clean() {
+	clean_general
+	clean_python
+	clean_vscode
+	clean_chrome
+	clean_purge
+}
+
+run_purge_only() {
+	clean_purge
+}
+
+###############################################################################
+# SUMMARY
+###############################################################################
+
+print_summary_line() {
+	local name="$1"
+	local found="$2"
+	local freed="$3"
+
+	if [ "$DRY_RUN" -eq 1 ]; then
+		printf "  %-12s found: %8s   would free: %8s\n" \
+			"$name" "$(human_size "$found")" "$(human_size "$found")"
+	else
+		printf "  %-12s found: %8s   freed:      %8s\n" \
+			"$name" "$(human_size "$found")" "$(human_size "$freed")"
+	fi
+}
+
+print_summary() {
+	echo
+	echo -e "${C_GREEN}-- Summary --${C_RESET}"
+	echo "Targets touched: $TOTAL_TARGETS"
+	echo
+
+	print_summary_line "general" "$GENERAL_FOUND" "$GENERAL_FREED"
+	print_summary_line "python"  "$PYTHON_FOUND"  "$PYTHON_FREED"
+	print_summary_line "vscode"  "$VSCODE_FOUND"  "$VSCODE_FREED"
+	print_summary_line "chrome"  "$CHROME_FOUND"  "$CHROME_FREED"
+	print_summary_line "purge"   "$PURGE_FOUND"   "$PURGE_FREED"
+
+	echo
+	if [ "$DRY_RUN" -eq 1 ]; then
+		echo "Total found : $(human_size "$TOTAL_FOUND_BYTES")"
+		echo "Would free  : $(human_size "$TOTAL_FOUND_BYTES")"
+	else
+		echo "Total found : $(human_size "$TOTAL_FOUND_BYTES")"
+		echo "Freed       : $(human_size "$TOTAL_FREED_BYTES")"
+	fi
+}
+
+###############################################################################
+# MAIN
+###############################################################################
+
+banner
+
+if [ "$ANALYZE" -eq 1 ]; then
+	run_analyze
+fi
+
+before_storage="$(get_storage)"
+echo -e "${C_YELLOW}\n -- Available Storage Before Cleaning : || ${before_storage} || --${C_RESET}"
+echo -e "${C_RED}\n -- Cleaning ...\n${C_RESET}"
+
+if [ -n "$ONLY_CATEGORY" ]; then
+	run_only_category
+elif [ "$PURGE_ONLY" -eq 1 ]; then
+	run_purge_only
+else
+	run_default_clean
+fi
+
+after_storage="$(get_storage)"
+
+print_summary
+
+if [ "$DRY_RUN" -eq 1 ]; then
+	echo -e "${C_YELLOW}\n -- DRY RUN complete. No files were deleted. --${C_RESET}"
+else
+	echo -e "${C_GREEN}\n -- Available Storage After Cleaning : || ${after_storage} || --${C_RESET}"
+fi
+
+echo
