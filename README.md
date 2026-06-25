@@ -34,19 +34,22 @@ chmod +x Magic_Cleaner
 Show usage:
 
 ```bash
-./Magic_Cleaner --help
+./Magic_Cleaner
 ```
 
-Run it:
+*(running with no arguments shows the same thing as `--help`)*
+
+Run the full default clean:
 
 ```bash
-./Magic_Cleaner
+./Magic_Cleaner --default
 ```
 
 ## Options
 
 | Flag | Short | Description |
 |---|---|---|
+| `--default` | `-d` | Run the full default clean: `general + python + vscode + chrome + purge` |
 | `--help` | `-h` | Show usage |
 | `--dry-run` | `-n` | Show what would be deleted, deletes nothing |
 | `--print` | `-p` | Print each target as it's processed |
@@ -59,22 +62,24 @@ Run it:
 ### Examples
 
 ```bash
-./Magic_Cleaner                      # default: general + python + vscode + chrome + purge
-./Magic_Cleaner --dry-run            # preview only, nothing deleted
+./Magic_Cleaner                      # no args: shows usage/help, does nothing else
+./Magic_Cleaner --default            # default: general + python + vscode + chrome + purge
+./Magic_Cleaner -d --dry-run         # preview the default run, nothing deleted
 ./Magic_Cleaner --analyze            # show biggest space hogs first
 ./Magic_Cleaner --only vscode        # clean just VS Code
 ./Magic_Cleaner --only purge         # run just the purge stage
 ./Magic_Cleaner --purge-unused-apps --yes   # purge stage only, no prompts
-./Magic_Cleaner --no-purge           # everything except purge
+./Magic_Cleaner -d --no-purge        # default run except purge
 ```
 
 ## Modes
 
-- **Default run** — runs all five categories in order: `general → python → vscode → chrome → purge`.
-- **`--only CATEGORY`** — runs exactly one category, skips the rest.
-- **`--purge-unused-apps`** — shortcut to run only the purge stage (same as `--only purge`).
-- **`--dry-run`** — runs the full selected scope but never calls `rm`; just reports what *would* be freed. Also auto-confirms any purge prompts (since nothing is actually deleted).
-- **`--analyze`** — runs before cleaning starts. Dumps the largest items under `~/.var/app`, `~/.cache`, `~/.config`, `~/.local/share`, and top-level `$HOME`, sorted by size. Good for deciding what's worth purging.
+- **No arguments** — shows the same usage/help text as `--help`/`-h` and exits. Nothing is cleaned.
+- **`--default` / `-d`** — runs all five categories in order: `general → python → vscode → chrome → purge`. This is what used to run automatically with no flags.
+- **`--only CATEGORY`** — runs exactly one category, skips the rest. Works standalone, without needing `--default`.
+- **`--purge-unused-apps`** — shortcut to run only the purge stage (same as `--only purge`). Works standalone, without needing `--default`.
+- **`--dry-run`** — runs the full selected scope but never calls `rm`; just reports what *would* be freed. Also auto-confirms any purge prompts (since nothing is actually deleted). Must be combined with `--default`, `--only`, or `--purge-unused-apps` to actually do anything — used on its own, the script prints "No action specified" and exits.
+- **`--analyze`** — runs before cleaning starts. Dumps the largest items under `~/.var/app`, `~/.cache`, `~/.config`, `~/.local/share`, and top-level `$HOME`, sorted by size. Good for deciding what's worth purging. Like `--dry-run`, pair it with `--default`, `--only`, or `--purge-unused-apps` to also run a cleaning stage afterward — used alone, it just analyzes and exits.
 
 ## What it deletes, by category
 

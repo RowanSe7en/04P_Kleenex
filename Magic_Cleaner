@@ -12,16 +12,18 @@
 # - Docker: untouched
 # - Firefox / Brave / Discord / Spotify: purge-capable, with confirmation
 #
-# Default run:
+# Running with no arguments shows help (same as --help / -h).
+# Use --default / -d to run the full default clean:
 #   general + python + vscode + chrome + purge
 #
 # Useful examples:
 #   ./Magic_Cleaner
-#   ./Magic_Cleaner --dry-run
+#   ./Magic_Cleaner --default
+#   ./Magic_Cleaner -d --dry-run
 #   ./Magic_Cleaner --analyze
 #   ./Magic_Cleaner --only vscode
 #   ./Magic_Cleaner --only purge
-#   ./Magic_Cleaner --no-purge
+#   ./Magic_Cleaner -d --no-purge
 #   ./Magic_Cleaner --purge-unused-apps --yes
 
 ###############################################################################
@@ -53,6 +55,7 @@ ANALYZE=0
 NO_PURGE=0
 AUTO_YES=0
 PURGE_ONLY=0
+DEFAULT_RUN=0
 ONLY_CATEGORY=""
 
 ###############################################################################
@@ -142,28 +145,33 @@ usage() {
 	cat <<EOF
 Usage: $SCRIPT_NAME [options]
 
-Options:
-  --dry-run, -n          Show what would be deleted, do not delete
-  --print, -p            Print each target before deleting it
-  --analyze              Show biggest space consumers in your HOME before cleaning
-  --no-purge             Skip full-app purge stage
-  --purge-unused-apps    Run only the purge stage
-  --only CATEGORY        Run only one category:
-                         general | python | vscode | chrome | purge
-  --yes, -y              Auto-confirm purge prompts
-  --help, -h             Show this help
+Running with no arguments shows this help. Use --default / -d to run
+the full default clean.
 
-Default run:
+Options:
+  --default, -d           Run the default clean: general + python + vscode + chrome + purge
+  --dry-run, -n           Show what would be deleted, do not delete
+  --print, -p             Print each target before deleting it
+  --analyze               Show biggest space consumers in your HOME before cleaning
+  --no-purge              Skip full-app purge stage
+  --purge-unused-apps     Run only the purge stage
+  --only CATEGORY         Run only one category:
+                          general | python | vscode | chrome | purge
+  --yes, -y               Auto-confirm purge prompts
+  --help, -h              Show this help
+
+Default run (--default / -d):
   general + python + vscode + chrome + purge
 
 Examples:
   $SCRIPT_NAME
-  $SCRIPT_NAME --dry-run
+  $SCRIPT_NAME --default
+  $SCRIPT_NAME -d --dry-run
   $SCRIPT_NAME --analyze
   $SCRIPT_NAME --only vscode
   $SCRIPT_NAME --only purge
   $SCRIPT_NAME --purge-unused-apps --yes
-  $SCRIPT_NAME --no-purge
+  $SCRIPT_NAME -d --no-purge
 EOF
 }
 
@@ -171,8 +179,16 @@ EOF
 # ARG PARSING
 ###############################################################################
 
+if [ $# -eq 0 ]; then
+	usage
+	exit 0
+fi
+
 while [ $# -gt 0 ]; do
 	case "$1" in
+		--default|-d)
+			DEFAULT_RUN=1
+			;;
 		--dry-run|-n)
 			DRY_RUN=1
 			;;
@@ -734,6 +750,11 @@ banner
 
 if [ "$ANALYZE" -eq 1 ]; then
 	run_analyze
+fi
+
+if [ -z "$ONLY_CATEGORY" ] && [ "$PURGE_ONLY" -ne 1 ] && [ "$DEFAULT_RUN" -ne 1 ]; then
+	echo -e "${C_YELLOW}No action specified. Use --default/-d to run the full clean, or --help for options.${C_RESET}"
+	exit 0
 fi
 
 before_storage="$(get_storage)"
