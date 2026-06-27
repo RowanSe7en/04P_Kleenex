@@ -13,17 +13,27 @@
 # - Firefox / Brave / Discord / Spotify: purge-capable, with confirmation
 #
 # Running with no arguments shows help (same as --help / -h).
-# Use --default / -d to run the full default clean:
-#   general + python + vscode + chrome + purge
+# Any other recognized option runs immediately on its own (no --default
+# needed): --dry-run, --print, --no-purge, --purge-unused-apps,
+# --only CATEGORY, and --yes all act standalone. Options that don't pick
+# a specific stage (--only) or a purge-only run (--purge-unused-apps) fall
+# back to the full default clean: general + python + vscode + chrome + purge.
+# Use --default / -d to run that full default clean explicitly.
+#
+# --analyze is read-only: used alone it only reports the biggest space
+# consumers in your HOME and exits, it never deletes anything. Combine it
+# with another action (e.g. --analyze -d) to see the report before that
+# action runs.
 #
 # Useful examples:
 #   ./Magic_Cleaner
 #   ./Magic_Cleaner --default
-#   ./Magic_Cleaner -d --dry-run
+#   ./Magic_Cleaner --dry-run
 #   ./Magic_Cleaner --analyze
+#   ./Magic_Cleaner --analyze -d
 #   ./Magic_Cleaner --only vscode
 #   ./Magic_Cleaner --only purge
-#   ./Magic_Cleaner -d --no-purge
+#   ./Magic_Cleaner --no-purge
 #   ./Magic_Cleaner --purge-unused-apps --yes
 
 ###############################################################################
@@ -39,7 +49,7 @@ shopt -s nullglob
 
 SCRIPT_NAME="$(basename "$0")"
 
-# Default purge policy based on what you told me:
+# Apps fully removed by the purge stage when enabled (1 = purge, 0 = skip):
 DEFAULT_PURGE_FIREFOX=1
 DEFAULT_PURGE_BRAVE=1
 DEFAULT_PURGE_DISCORD=1
@@ -57,6 +67,7 @@ AUTO_YES=0
 PURGE_ONLY=0
 DEFAULT_RUN=0
 ONLY_CATEGORY=""
+ANY_OPTION_SET=0
 
 ###############################################################################
 # COLORS
@@ -145,33 +156,55 @@ usage() {
 	cat <<EOF
 Usage: $SCRIPT_NAME [options]
 
-Running with no arguments shows this help. Use --default / -d to run
-the full default clean.
+Running with no arguments shows this help. Any option below runs on its
+own; --only and --purge-unused-apps run just that one stage, everything
+else (--dry-run, --print, --no-purge, --yes) falls back to the full
+default clean unless combined with --only. --analyze is read-only: used
+by itself it just prints the report and exits, it never deletes anything.
 
 Options:
   --default, -d           Run the default clean: general + python + vscode + chrome + purge
   --dry-run, -n           Show what would be deleted, do not delete
   --print, -p             Print each target before deleting it
-  --analyze               Show biggest space consumers in your HOME before cleaning
-  --no-purge              Skip full-app purge stage
-  --purge-unused-apps     Run only the purge stage
+  --analyze               Report-only: show biggest space consumers in your
+                          HOME. Deletes nothing. Combine with another
+                          option (e.g. --analyze -d) to see the report
+                          before that option runs.
+  --no-purge              Run the clean but skip the purge stage entirely
+  --purge-unused-apps     Run ONLY the purge stage (skips general/python/
+                          vscode/chrome)
   --only CATEGORY         Run only one category:
                           general | python | vscode | chrome | purge
-  --yes, -y               Auto-confirm purge prompts
+  --yes, -y               Auto-confirm purge prompts (see PURGE STAGE below)
   --help, -h              Show this help
 
-Default run (--default / -d):
+PURGE STAGE:
+  The purge stage fully deletes the local data of these apps, not just
+  their caches: Firefox, Brave, Discord, Spotify (Flatpak installs under
+  ~/.var/app). This is the only stage that removes more than caches/junk,
+  so each app asks for an interactive y/N confirmation before it is wiped,
+  showing you its size first. It runs as part of the default clean unless
+  skipped, and can also be targeted directly:
+    --no-purge           include it in a clean, but skip purge specifically
+    --purge-unused-apps  run ONLY purge, skip every other stage
+    --only purge         same as --purge-unused-apps
+    --yes / -y           skip the confirmation prompts (auto-confirm)
+    --dry-run / -n       show what purge would remove, with no prompts
+                         and nothing deleted
+
+Default run (--default / -d, or any standalone flag with no --only):
   general + python + vscode + chrome + purge
 
 Examples:
   $SCRIPT_NAME
   $SCRIPT_NAME --default
-  $SCRIPT_NAME -d --dry-run
+  $SCRIPT_NAME --dry-run
   $SCRIPT_NAME --analyze
+  $SCRIPT_NAME --analyze -d
   $SCRIPT_NAME --only vscode
   $SCRIPT_NAME --only purge
+  $SCRIPT_NAME --no-purge
   $SCRIPT_NAME --purge-unused-apps --yes
-  $SCRIPT_NAME -d --no-purge
 EOF
 }
 
@@ -188,21 +221,27 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 		--default|-d)
 			DEFAULT_RUN=1
+			ANY_OPTION_SET=1
 			;;
 		--dry-run|-n)
 			DRY_RUN=1
+			ANY_OPTION_SET=1
 			;;
 		--print|-p)
 			PRINT_ITEMS=1
+			ANY_OPTION_SET=1
 			;;
 		--analyze)
 			ANALYZE=1
+			ANY_OPTION_SET=1
 			;;
 		--no-purge)
 			NO_PURGE=1
+			ANY_OPTION_SET=1
 			;;
 		--purge-unused-apps)
 			PURGE_ONLY=1
+			ANY_OPTION_SET=1
 			;;
 		--only)
 			shift
@@ -212,9 +251,11 @@ while [ $# -gt 0 ]; do
 				exit 1
 			fi
 			ONLY_CATEGORY="$1"
+			ANY_OPTION_SET=1
 			;;
 		--yes|-y)
 			AUTO_YES=1
+			ANY_OPTION_SET=1
 			;;
 		--help|-h)
 			usage
@@ -244,10 +285,19 @@ esac
 ###############################################################################
 
 get_storage() {
+	# Human-readable available space in $HOME's filesystem (for display).
 	local storage
 	storage=$(df -h "$HOME" | awk 'NR==2 {print $4}')
 	[ -z "$storage" ] && storage="0B"
 	echo "$storage"
+}
+
+get_storage_bytes() {
+	# Available space in $HOME's filesystem, in bytes (for computing the delta).
+	local bytes
+	bytes=$(df -B1 "$HOME" | awk 'NR==2 {print $4}')
+	[[ "$bytes" =~ ^[0-9]+$ ]] || bytes=0
+	echo "$bytes"
 }
 
 human_size() {
@@ -752,12 +802,21 @@ if [ "$ANALYZE" -eq 1 ]; then
 	run_analyze
 fi
 
-if [ -z "$ONLY_CATEGORY" ] && [ "$PURGE_ONLY" -ne 1 ] && [ "$DEFAULT_RUN" -ne 1 ]; then
+if [ "$ANY_OPTION_SET" -ne 1 ]; then
 	echo -e "${C_YELLOW}No action specified. Use --default/-d to run the full clean, or --help for options.${C_RESET}"
 	exit 0
 fi
 
+# --analyze is a read-only report. If it's the only thing requested,
+# stop here: never delete anything just because --analyze was passed.
+if [ "$ANALYZE" -eq 1 ] && [ -z "$ONLY_CATEGORY" ] && [ "$PURGE_ONLY" -ne 1 ] \
+	&& [ "$DEFAULT_RUN" -ne 1 ] && [ "$DRY_RUN" -ne 1 ] && [ "$PRINT_ITEMS" -ne 1 ] \
+	&& [ "$NO_PURGE" -ne 1 ] && [ "$AUTO_YES" -ne 1 ]; then
+	exit 0
+fi
+
 before_storage="$(get_storage)"
+before_storage_bytes="$(get_storage_bytes)"
 echo -e "${C_YELLOW}\n -- Available Storage Before Cleaning : || ${before_storage} || --${C_RESET}"
 echo -e "${C_RED}\n -- Cleaning ...\n${C_RESET}"
 
@@ -770,6 +829,8 @@ else
 fi
 
 after_storage="$(get_storage)"
+after_storage_bytes="$(get_storage_bytes)"
+storage_delta_bytes=$((after_storage_bytes - before_storage_bytes))
 
 print_summary
 
@@ -777,6 +838,11 @@ if [ "$DRY_RUN" -eq 1 ]; then
 	echo -e "${C_YELLOW}\n -- DRY RUN complete. No files were deleted. --${C_RESET}"
 else
 	echo -e "${C_GREEN}\n -- Available Storage After Cleaning : || ${after_storage} || --${C_RESET}"
+	if [ "$storage_delta_bytes" -ge 0 ]; then
+		echo -e "${C_GREEN} -- Storage Freed (disk delta)       : || $(human_size "$storage_delta_bytes") || --${C_RESET}"
+	else
+		echo -e "${C_YELLOW} -- Storage Freed (disk delta)       : || disk usage grew by $(human_size "$((storage_delta_bytes * -1))") during the run, see Summary above --${C_RESET}"
+	fi
 fi
 
 echo
