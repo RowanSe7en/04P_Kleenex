@@ -9,32 +9,57 @@
 # - Python/dev caches: aggressive cache cleanup, but NEVER delete whole .venv
 # - VS Code: medium cleanup
 # - Chrome: cleanup only
+# - Obsidian / Prism Launcher / GNOME Extension Manager / clipboard
+#   history / stray *.log/.pyc/.pyo files / Trash: cleanup only
 # - Docker: untouched
-# - Firefox / Brave / Discord / Spotify: purge-capable, with confirmation
+# - Firefox / Brave / Discord / Spotify: CACHE-ONLY by default (safe).
+#   Full wipe of their profile/login data (history, passwords, sessions,
+#   saved logins, etc.) ONLY happens under --extreme, and only for apps
+#   you explicitly opt into (or all four if no app flag is given), with a
+#   confirmation prompt per app.
 #
 # Running with no arguments shows help (same as --help / -h).
 # Any other recognized option runs immediately on its own (no --default
-# needed): --dry-run, --print, --no-purge, --purge-unused-apps,
-# --only CATEGORY, and --yes all act standalone. Options that don't pick
-# a specific stage (--only) or a purge-only run (--purge-unused-apps) fall
-# back to the full default clean: general + python + vscode + chrome + purge.
+# needed): --dry-run/-dr, --print, --extreme/-e, --only/-o CATEGORY,
+# and --yes all act standalone. Options that don't pick a specific stage
+# (--only) or an extreme-only run (--firefox/--brave/--discord/--spotify
+# without --default) fall back to the full default clean: general +
+# python + vscode + chrome + firefox-cache + brave-cache + discord-cache
+# + spotify-cache + misc caches (Obsidian, Prism Launcher, GNOME
+# Extension Manager, clipboard history, stray logs/.pyc/.pyo, Trash).
 # Use --default / -d to run that full default clean explicitly.
 #
-# --analyze is read-only: used alone it only reports the biggest space
-# consumers in your HOME and exits, it never deletes anything. Combine it
-# with another action (e.g. --analyze -d) to see the report before that
-# action runs.
+# --analyze / -a is read-only: used alone it only reports the biggest
+# space consumers in your HOME and exits, it never deletes anything.
+# Combine it with another action (e.g. --analyze -d) to see the report
+# before that action runs.
+#
+# SAFE vs EXTREME, in one sentence:
+#   -d cleans caches everywhere (including Firefox/Brave/Discord/Spotify
+#   cache folders, plus Obsidian/Prism/clipboard-history/logs/etc.) and
+#   NEVER touches your saved logins/history/sessions.
+#   --extreme / -e is the only thing that deletes a whole app's profile
+#   data, and you choose which app(s) with --firefox / --brave /
+#   --discord / --spotify (omit all of them to extreme-wipe every
+#   supported app).
+#
+# Every path-based cleanup target is safe to run even if the path
+# doesn't exist on this machine: missing files/dirs are silently
+# skipped, never treated as an error.
 #
 # Useful examples:
 #   ./Magic_Cleaner
 #   ./Magic_Cleaner --default
 #   ./Magic_Cleaner --dry-run
+#   ./Magic_Cleaner -dr
 #   ./Magic_Cleaner --analyze
-#   ./Magic_Cleaner --analyze -d
+#   ./Magic_Cleaner -a -d
 #   ./Magic_Cleaner --only vscode
-#   ./Magic_Cleaner --only purge
-#   ./Magic_Cleaner --no-purge
-#   ./Magic_Cleaner --purge-unused-apps --yes
+#   ./Magic_Cleaner -o firefox
+#   ./Magic_Cleaner --extreme --brave
+#   ./Magic_Cleaner -e --discord
+#   ./Magic_Cleaner --extreme --brave --discord
+#   ./Magic_Cleaner --extreme --yes      # wipes ALL four apps, no prompts
 
 ###############################################################################
 # SHELL / SAFETY
@@ -49,11 +74,18 @@ shopt -s nullglob
 
 SCRIPT_NAME="$(basename "$0")"
 
-# Apps fully removed by the purge stage when enabled (1 = purge, 0 = skip):
-DEFAULT_PURGE_FIREFOX=1
-DEFAULT_PURGE_BRAVE=1
-DEFAULT_PURGE_DISCORD=1
-DEFAULT_PURGE_SPOTIFY=1
+# Apps whose CACHE is cleaned by the default safe run (1 = clean, 0 = skip).
+# This never touches history, passwords, sessions, or other profile data.
+DEFAULT_CACHE_FIREFOX=1
+DEFAULT_CACHE_BRAVE=1
+DEFAULT_CACHE_DISCORD=1
+DEFAULT_CACHE_SPOTIFY=1
+
+# Apps fully wiped (entire profile dir, including logins/history/sessions)
+# ONLY when --extreme is used. These are just the "supported" list; which
+# of them actually run is controlled by EXTREME_* flags set from --firefox
+# / --brave / --discord / --spotify (see FLAGS below).
+EXTREME_SUPPORTED_APPS=(firefox brave discord spotify)
 
 ###############################################################################
 # FLAGS
@@ -62,9 +94,13 @@ DEFAULT_PURGE_SPOTIFY=1
 DRY_RUN=0
 PRINT_ITEMS=0
 ANALYZE=0
-NO_PURGE=0
 AUTO_YES=0
-PURGE_ONLY=0
+EXTREME=0
+EXTREME_ONLY=0
+EXTREME_FIREFOX=0
+EXTREME_BRAVE=0
+EXTREME_DISCORD=0
+EXTREME_SPOTIFY=0
 DEFAULT_RUN=0
 ONLY_CATEGORY=""
 ANY_OPTION_SET=0
@@ -105,8 +141,20 @@ VSCODE_FREED=0
 CHROME_FOUND=0
 CHROME_FREED=0
 
-PURGE_FOUND=0
-PURGE_FREED=0
+FIREFOX_FOUND=0
+FIREFOX_FREED=0
+
+BRAVE_FOUND=0
+BRAVE_FREED=0
+
+DISCORD_FOUND=0
+DISCORD_FREED=0
+
+SPOTIFY_FOUND=0
+SPOTIFY_FREED=0
+
+EXTREME_FOUND=0
+EXTREME_FREED=0
 
 CURRENT_CATEGORY=""
 
@@ -157,54 +205,87 @@ usage() {
 Usage: $SCRIPT_NAME [options]
 
 Running with no arguments shows this help. Any option below runs on its
-own; --only and --purge-unused-apps run just that one stage, everything
-else (--dry-run, --print, --no-purge, --yes) falls back to the full
-default clean unless combined with --only. --analyze is read-only: used
-by itself it just prints the report and exits, it never deletes anything.
+own; --only/-o and --extreme/-e run just their own stage, everything
+else (--dry-run, --print, --yes) falls back to the full default clean
+unless combined with --only or --extreme. --analyze/-a is read-only:
+used by itself it just prints the report and exits, it never deletes
+anything.
 
 Options:
-  --default, -d           Run the default clean: general + python + vscode + chrome + purge
-  --dry-run, -n           Show what would be deleted, do not delete
+  --default, -d           Run the default SAFE clean: general + python +
+                          vscode + chrome + firefox-cache + brave-cache +
+                          discord-cache + spotify-cache + misc caches
+                          (Obsidian, Prism Launcher, GNOME Extension
+                          Manager, clipboard history, stray logs/.pyc/
+                          .pyo, Trash). Never touches history, passwords,
+                          sessions, or saved logins.
+  --dry-run, -dr          Show what would be deleted, do not delete
   --print, -p             Print each target before deleting it
-  --analyze               Report-only: show biggest space consumers in your
-                          HOME. Deletes nothing. Combine with another
-                          option (e.g. --analyze -d) to see the report
-                          before that option runs.
-  --no-purge              Run the clean but skip the purge stage entirely
-  --purge-unused-apps     Run ONLY the purge stage (skips general/python/
-                          vscode/chrome)
-  --only CATEGORY         Run only one category:
-                          general | python | vscode | chrome | purge
-  --yes, -y               Auto-confirm purge prompts (see PURGE STAGE below)
+  --analyze, -a           Report-only: show biggest space consumers in
+                          your HOME. Deletes nothing. Combine with
+                          another option (e.g. --analyze -d) to see the
+                          report before that option runs.
+  --only, -o CATEGORY     Run only one category:
+                          general | python | vscode | chrome |
+                          firefox | brave | discord | spotify
+  --extreme, -e           DANGEROUS. Fully wipe the entire profile dir
+                          (history, passwords, sessions, saved logins —
+                          everything) of one or more apps. See EXTREME
+                          MODE below. Always asks for confirmation per
+                          app unless --yes is also given.
+  --firefox               With --extreme: target Firefox
+  --brave                 With --extreme: target Brave
+  --discord               With --extreme: target Discord
+  --spotify               With --extreme: target Spotify
+  --yes, -y               Auto-confirm extreme-wipe prompts (see
+                          EXTREME MODE below)
   --help, -h              Show this help
 
-PURGE STAGE:
-  The purge stage fully deletes the local data of these apps, not just
-  their caches: Firefox, Brave, Discord, Spotify (Flatpak installs under
-  ~/.var/app). This is the only stage that removes more than caches/junk,
-  so each app asks for an interactive y/N confirmation before it is wiped,
-  showing you its size first. It runs as part of the default clean unless
-  skipped, and can also be targeted directly:
-    --no-purge           include it in a clean, but skip purge specifically
-    --purge-unused-apps  run ONLY purge, skip every other stage
-    --only purge         same as --purge-unused-apps
-    --yes / -y           skip the confirmation prompts (auto-confirm)
-    --dry-run / -n       show what purge would remove, with no prompts
-                         and nothing deleted
+APP CACHE CATEGORIES (safe, part of the default clean):
+  firefox / brave / discord / spotify each clean ONLY that app's CACHE
+  folders (Flatpak installs under ~/.var/app) — things like Cache, Code
+  Cache, GPUCache, Service Worker, shader caches. History, bookmarks,
+  passwords, saved logins, and sessions are never touched by these.
+  They run as part of the default clean, and can also be targeted
+  directly:
+    --only firefox / -o brave / etc.   clean just that one app's cache
+    --dry-run, -dr                     show what would be cleaned,
+                                       nothing deleted
 
-Default run (--default / -d, or any standalone flag with no --only):
-  general + python + vscode + chrome + purge
+EXTREME MODE (--extreme, -e): DANGEROUS, OPT-IN, PER-APP
+  This is the ONLY stage that deletes more than a cache: it removes an
+  app's entire local data directory, including history, saved logins,
+  passwords, and active sessions. It NEVER runs as part of the default
+  clean and NEVER runs unless you pass --extreme/-e explicitly.
+
+  Pick which app(s) to wipe with --firefox / --brave / --discord /
+  --spotify. You can combine several. If --extreme is given with NONE
+  of those app flags, it wipes ALL FOUR supported apps (the old
+  "purge everything" behavior) — so be careful with --extreme --yes
+  on its own.
+
+  Each targeted app shows its size and asks for an interactive y/N
+  confirmation before it is wiped, unless --yes / -y is also given.
+  --dry-run / -dr shows what extreme mode would remove, with no prompts
+  and nothing deleted.
+
+Default run (--default / -d, or any standalone flag with no --only and
+no --extreme): general + python + vscode + chrome + firefox + brave +
+discord + spotify caches + misc caches (all safe).
 
 Examples:
   $SCRIPT_NAME
   $SCRIPT_NAME --default
   $SCRIPT_NAME --dry-run
+  $SCRIPT_NAME -dr
   $SCRIPT_NAME --analyze
-  $SCRIPT_NAME --analyze -d
+  $SCRIPT_NAME -a -d
   $SCRIPT_NAME --only vscode
-  $SCRIPT_NAME --only purge
-  $SCRIPT_NAME --no-purge
-  $SCRIPT_NAME --purge-unused-apps --yes
+  $SCRIPT_NAME -o firefox
+  $SCRIPT_NAME --extreme --brave
+  $SCRIPT_NAME -e --discord
+  $SCRIPT_NAME --extreme --brave --discord
+  $SCRIPT_NAME --extreme --yes        # wipes ALL four apps, no prompts
 EOF
 }
 
@@ -223,7 +304,7 @@ while [ $# -gt 0 ]; do
 			DEFAULT_RUN=1
 			ANY_OPTION_SET=1
 			;;
-		--dry-run|-n)
+		--dry-run|-dr)
 			DRY_RUN=1
 			ANY_OPTION_SET=1
 			;;
@@ -231,19 +312,11 @@ while [ $# -gt 0 ]; do
 			PRINT_ITEMS=1
 			ANY_OPTION_SET=1
 			;;
-		--analyze)
+		--analyze|-a)
 			ANALYZE=1
 			ANY_OPTION_SET=1
 			;;
-		--no-purge)
-			NO_PURGE=1
-			ANY_OPTION_SET=1
-			;;
-		--purge-unused-apps)
-			PURGE_ONLY=1
-			ANY_OPTION_SET=1
-			;;
-		--only)
+		--only|-o)
 			shift
 			if [ -z "$1" ]; then
 				echo -e "${C_RED}--only requires a category${C_RESET}"
@@ -251,6 +324,27 @@ while [ $# -gt 0 ]; do
 				exit 1
 			fi
 			ONLY_CATEGORY="$1"
+			ANY_OPTION_SET=1
+			;;
+		--extreme|--extreem|-extreme|-extreem|-e)
+			EXTREME=1
+			EXTREME_ONLY=1
+			ANY_OPTION_SET=1
+			;;
+		--firefox)
+			EXTREME_FIREFOX=1
+			ANY_OPTION_SET=1
+			;;
+		--brave)
+			EXTREME_BRAVE=1
+			ANY_OPTION_SET=1
+			;;
+		--discord)
+			EXTREME_DISCORD=1
+			ANY_OPTION_SET=1
+			;;
+		--spotify)
+			EXTREME_SPOTIFY=1
 			ANY_OPTION_SET=1
 			;;
 		--yes|-y)
@@ -271,7 +365,7 @@ while [ $# -gt 0 ]; do
 done
 
 case "$ONLY_CATEGORY" in
-	""|general|python|vscode|chrome|purge)
+	""|general|python|vscode|chrome|firefox|brave|discord|spotify)
 		;;
 	*)
 		echo -e "${C_RED}Invalid category for --only: $ONLY_CATEGORY${C_RESET}"
@@ -279,6 +373,20 @@ case "$ONLY_CATEGORY" in
 		exit 1
 		;;
 esac
+
+# --firefox/--brave/--discord/--spotify only make sense with --extreme.
+if [ "$EXTREME" -ne 1 ] && { [ "$EXTREME_FIREFOX" -eq 1 ] || [ "$EXTREME_BRAVE" -eq 1 ] \
+	|| [ "$EXTREME_DISCORD" -eq 1 ] || [ "$EXTREME_SPOTIFY" -eq 1 ]; }; then
+	echo -e "${C_RED}--firefox/--brave/--discord/--spotify require --extreme${C_RESET}"
+	usage
+	exit 1
+fi
+
+# If --extreme was combined with --default/-d, it's no longer an
+# extreme-only run: run the full safe clean AND the extreme wipe.
+if [ "$DEFAULT_RUN" -eq 1 ] && [ "$EXTREME" -eq 1 ]; then
+	EXTREME_ONLY=0
+fi
 
 ###############################################################################
 # GENERIC HELPERS
@@ -341,11 +449,15 @@ add_found_bytes() {
 	TOTAL_FOUND_BYTES=$((TOTAL_FOUND_BYTES + bytes))
 
 	case "$CURRENT_CATEGORY" in
-		general) GENERAL_FOUND=$((GENERAL_FOUND + bytes)) ;;
-		python)  PYTHON_FOUND=$((PYTHON_FOUND + bytes)) ;;
-		vscode)  VSCODE_FOUND=$((VSCODE_FOUND + bytes)) ;;
-		chrome)  CHROME_FOUND=$((CHROME_FOUND + bytes)) ;;
-		purge)   PURGE_FOUND=$((PURGE_FOUND + bytes)) ;;
+		general)  GENERAL_FOUND=$((GENERAL_FOUND + bytes)) ;;
+		python)   PYTHON_FOUND=$((PYTHON_FOUND + bytes)) ;;
+		vscode)   VSCODE_FOUND=$((VSCODE_FOUND + bytes)) ;;
+		chrome)   CHROME_FOUND=$((CHROME_FOUND + bytes)) ;;
+		firefox)  FIREFOX_FOUND=$((FIREFOX_FOUND + bytes)) ;;
+		brave)    BRAVE_FOUND=$((BRAVE_FOUND + bytes)) ;;
+		discord)  DISCORD_FOUND=$((DISCORD_FOUND + bytes)) ;;
+		spotify)  SPOTIFY_FOUND=$((SPOTIFY_FOUND + bytes)) ;;
+		extreme)  EXTREME_FOUND=$((EXTREME_FOUND + bytes)) ;;
 	esac
 }
 
@@ -355,11 +467,15 @@ add_freed_bytes() {
 	TOTAL_FREED_BYTES=$((TOTAL_FREED_BYTES + bytes))
 
 	case "$CURRENT_CATEGORY" in
-		general) GENERAL_FREED=$((GENERAL_FREED + bytes)) ;;
-		python)  PYTHON_FREED=$((PYTHON_FREED + bytes)) ;;
-		vscode)  VSCODE_FREED=$((VSCODE_FREED + bytes)) ;;
-		chrome)  CHROME_FREED=$((CHROME_FREED + bytes)) ;;
-		purge)   PURGE_FREED=$((PURGE_FREED + bytes)) ;;
+		general)  GENERAL_FREED=$((GENERAL_FREED + bytes)) ;;
+		python)   PYTHON_FREED=$((PYTHON_FREED + bytes)) ;;
+		vscode)   VSCODE_FREED=$((VSCODE_FREED + bytes)) ;;
+		chrome)   CHROME_FREED=$((CHROME_FREED + bytes)) ;;
+		firefox)  FIREFOX_FREED=$((FIREFOX_FREED + bytes)) ;;
+		brave)    BRAVE_FREED=$((BRAVE_FREED + bytes)) ;;
+		discord)  DISCORD_FREED=$((DISCORD_FREED + bytes)) ;;
+		spotify)  SPOTIFY_FREED=$((SPOTIFY_FREED + bytes)) ;;
+		extreme)  EXTREME_FREED=$((EXTREME_FREED + bytes)) ;;
 	esac
 }
 
@@ -431,7 +547,7 @@ confirm_prompt() {
 	esac
 }
 
-purge_app_dir() {
+extreme_wipe_app_dir() {
 	local app_name="$1"
 	local app_path="$2"
 	local bytes
@@ -442,7 +558,7 @@ purge_app_dir() {
 	[ -z "$bytes" ] && bytes=0
 	[ "$bytes" -eq 0 ] && return 0
 
-	echo -e "${C_YELLOW}\nAbout to fully remove ${app_name}:${C_RESET}"
+	echo -e "${C_RED}\n[EXTREME] About to fully wipe ${app_name} (history, logins, sessions, everything):${C_RESET}"
 	echo "  $app_path"
 	echo "  Size: $(human_size "$bytes")"
 
@@ -455,7 +571,7 @@ purge_app_dir() {
 	add_found_bytes "$bytes"
 
 	if [ "$PRINT_ITEMS" -eq 1 ] || [ "$DRY_RUN" -eq 1 ]; then
-		print_item "PURGE $app_name" "$bytes"
+		print_item "EXTREME WIPE $app_name" "$bytes"
 	fi
 
 	if [ "$DRY_RUN" -eq 1 ]; then
@@ -500,7 +616,7 @@ run_analyze() {
 
 clean_general() {
 	CURRENT_CATEGORY="general"
-	echo -e "${C_ORANGE}-- [general] 42 / trash / cache / tmp --${C_RESET}"
+	echo -e "${C_ORANGE}-- [general] 42 / trash / cache / tmp / misc app caches --${C_RESET}"
 
 	# 42 / shell leftovers
 	remove_glob "42 cache" "$HOME"/.42*
@@ -521,6 +637,30 @@ clean_general() {
 	remove_glob ".DS_Store" "$HOME"/Desktop/**/*/.DS_Store
 	remove_glob "Piscine Rules videos" "$HOME"/Desktop/Piscine\ Rules\ *.mp4
 	remove_glob "PLAY_ME.webloc" "$HOME"/Desktop/PLAY_ME.webloc
+
+	# Obsidian (cache/render junk only, vault content untouched)
+	remove_glob "obsidian Cache" "$HOME"/.config/obsidian/Cache/*
+	remove_glob "obsidian Code Cache" "$HOME"/.config/obsidian/Code\ Cache/*
+	remove_glob "obsidian GPUCache" "$HOME"/.config/obsidian/GPUCache/*
+	remove_glob "obsidian DawnGraphiteCache" "$HOME"/.config/obsidian/DawnGraphiteCache/*
+	remove_glob "obsidian DawnWebGPUCache" "$HOME"/.config/obsidian/DawnWebGPUCache/*
+	remove_glob "obsidian Shared Dictionary cache" "$HOME"/.config/obsidian/Shared\ Dictionary/cache/*
+
+	# Prism Launcher (Minecraft launcher cache/logs, instances untouched)
+	remove_glob "PrismLauncher cache" "$HOME"/.local/share/PrismLauncher/cache/*
+	remove_glob "PrismLauncher logs" "$HOME"/.local/share/PrismLauncher/logs/*
+
+	# GNOME Extension Manager
+	remove_glob "ExtensionManager cache" "$HOME"/.var/app/com.mattjakeman.ExtensionManager/cache/*
+
+	# Clipboard history
+	remove_glob "clipboard history cache" "$HOME"/.cache/clipboard-history@alexsaveau.dev/*
+
+	# Stray log files anywhere under HOME (safe: logs are disposable)
+	find "$HOME" -type f -name "*.log" -print0 2>/dev/null | \
+		while IFS= read -r -d '' f; do remove_path "$f" "stray log"; done
+	find "$HOME" -type f -name "LOG.old" -print0 2>/dev/null | \
+		while IFS= read -r -d '' f; do remove_path "$f" "LOG.old"; done
 
 	# /tmp files owned by user
 	# We enumerate both dry-run and real mode so stats are accurate.
@@ -577,6 +717,13 @@ clean_python() {
 		-name ".pytest_cache" \
 		-not -path "*/.venv/*" \
 		-print0 2>/dev/null)
+
+	# Stray compiled Python files (.pyc/.pyo) anywhere under HOME, outside
+	# .venv. Safe: these are regenerated automatically by the interpreter.
+	find "$HOME" -type f -name "*.pyc" -not -path "*/.venv/*" -print0 2>/dev/null | \
+		while IFS= read -r -d '' f; do remove_path "$f" "python .pyc"; done
+	find "$HOME" -type f -name "*.pyo" -not -path "*/.venv/*" -print0 2>/dev/null | \
+		while IFS= read -r -d '' f; do remove_path "$f" "python .pyo"; done
 }
 
 clean_vscode() {
@@ -593,16 +740,18 @@ clean_vscode() {
 	# Core caches
 	remove_literal_dir_contents "$base/config/Code/Cache" "vscode code cache"
 	remove_literal_dir_contents "$base/config/Code/CachedData" "vscode cached data"
+	remove_literal_dir_contents "$base/config/Code/CachedProfilesData" "vscode cached profiles data"
 	remove_literal_dir_contents "$base/config/Code/GPUCache" "vscode gpu cache"
 	remove_literal_dir_contents "$base/config/Code/logs" "vscode logs"
 	remove_literal_dir_contents "$base/config/Code/Crashpad" "vscode crashpad"
+	remove_literal_dir_contents "$base/config/Code/Service Worker/CacheStorage" "vscode service worker cache storage"
 	remove_literal_dir_contents "$base/config/Code/Service Worker" "vscode service worker"
 	remove_literal_dir_contents "$base/config/Code/Local Storage" "vscode local storage"
 	remove_literal_dir_contents "$base/config/Code/Session Storage" "vscode session storage"
 	remove_literal_dir_contents "$base/config/Code/WebStorage" "vscode webstorage"
 	remove_literal_dir_contents "$base/config/Code/DawnWebGPUCache" "vscode dawn webgpu cache"
 	remove_literal_dir_contents "$base/config/Code/DawnGraphiteCache" "vscode dawn graphite cache"
-	remove_literal_dir_contents "$base/config/Code/Shared Dictionary" "vscode shared dictionary"
+	remove_literal_dir_contents "$base/config/Code/Shared Dictionary/cache" "vscode shared dictionary cache"
 
 	# Heavy real target on your machine
 	remove_literal_dir_contents \
@@ -624,6 +773,8 @@ clean_chrome_profile() {
 
 	[ ! -d "$profile" ] && return 0
 
+	remove_literal_dir_contents "$profile/Service Worker/CacheStorage" "chrome service worker cache storage"
+	remove_literal_dir_contents "$profile/Service Worker/ScriptCache" "chrome service worker script cache"
 	remove_literal_dir_contents "$profile/Service Worker" "chrome service worker"
 	remove_literal_dir_contents "$profile/GPUCache" "chrome gpu cache"
 	remove_literal_dir_contents "$profile/DawnWebGPUCache" "chrome dawn webgpu cache"
@@ -633,6 +784,7 @@ clean_chrome_profile() {
 	remove_literal_dir_contents "$profile/Application Cache" "chrome application cache"
 	remove_literal_dir_contents "$profile/File System" "chrome file system"
 	remove_literal_dir_contents "$profile/blob_storage" "chrome blob storage"
+	remove_literal_dir_contents "$profile/Shared Dictionary/cache" "chrome shared dictionary cache"
 }
 
 clean_chrome() {
@@ -692,6 +844,58 @@ clean_chrome() {
 		"$base/config/google-chrome/OnDeviceHeadSuggestModel" \
 		"chrome OnDeviceHeadSuggestModel"
 
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/GraphiteDawnCache" \
+		"chrome GraphiteDawnCache"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/GPUPersistentCache" \
+		"chrome GPUPersistentCache"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/Safe Browsing" \
+		"chrome Safe Browsing"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/Crashpad" \
+		"chrome Crashpad"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/WasmTtsEngine" \
+		"chrome WasmTtsEngine"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/CertificateRevocation" \
+		"chrome CertificateRevocation"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/ZxcvbnData" \
+		"chrome ZxcvbnData"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/ActorSafetyLists" \
+		"chrome ActorSafetyLists"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/OptimizationHints" \
+		"chrome OptimizationHints"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/PKIMetadata" \
+		"chrome PKIMetadata"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/Crowd Deny" \
+		"chrome Crowd Deny"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/SafetyTips" \
+		"chrome SafetyTips"
+
+	remove_literal_dir_contents \
+		"$base/config/google-chrome/hyphen-data" \
+		"chrome hyphen-data"
+
 	# clean all profiles dynamically, not just Profile 1..4
 	for p in "$base"/config/google-chrome/Default "$base"/config/google-chrome/Profile*; do
 		[ -d "$p" ] || continue
@@ -699,30 +903,165 @@ clean_chrome() {
 	done
 }
 
-clean_purge() {
-	CURRENT_CATEGORY="purge"
+clean_firefox_cache() {
+	local base="$HOME/.var/app/org.mozilla.firefox"
+	local p
 
-	[ "$NO_PURGE" -eq 1 ] && {
-		echo -e "${C_YELLOW}-- [purge] skipped due to --no-purge${C_RESET}"
-		return 0
-	}
+	[ ! -d "$base" ] && return 0
 
-	echo -e "${C_ORANGE}-- [purge] full app purges --${C_RESET}"
+	# Flatpak-level cache
+	remove_literal_dir_contents "$base/cache" "firefox flatpak cache"
 
-	if [ "$DEFAULT_PURGE_FIREFOX" -eq 1 ]; then
-		purge_app_dir "Firefox" "$HOME/.var/app/org.mozilla.firefox"
+	# Firefox keeps its real browser cache under
+	# .var/app/.../cache/mozilla/firefox/<profile>/cache2 (and similar),
+	# which the line above already covers. Also sweep profile-level
+	# cache/thumbnail dirs without touching places.sqlite, logins.json,
+	# cookies, or sessionstore — those stay completely untouched.
+	for p in "$base"/config/mozilla/firefox/*.default* "$base"/.mozilla/firefox/*.default*; do
+		[ -d "$p" ] || continue
+		remove_literal_dir_contents "$p/cache2" "firefox profile cache2"
+		remove_literal_dir_contents "$p/startupCache" "firefox startupCache"
+		remove_literal_dir_contents "$p/shader-cache" "firefox shader-cache"
+		remove_literal_dir_contents "$p/thumbnails" "firefox thumbnails"
+		remove_literal_dir_contents "$p/OfflineCache" "firefox OfflineCache"
+	done
+}
+
+clean_brave_cache() {
+	local base="$HOME/.var/app/com.brave.Browser"
+	local p
+
+	[ ! -d "$base" ] && return 0
+
+	# Flatpak-level cache
+	remove_literal_dir_contents "$base/cache" "brave flatpak cache"
+
+	# Brave is Chromium-based: same cache folder names as Chrome, per
+	# profile, under config/BraveSoftware/Brave-Browser. None of these
+	# touch Login Data, History, Cookies, or Sessions.
+	for p in "$base"/config/BraveSoftware/Brave-Browser/Default \
+		"$base"/config/BraveSoftware/Brave-Browser/Profile*; do
+		[ -d "$p" ] || continue
+		remove_literal_dir_contents "$p/Service Worker" "brave service worker"
+		remove_literal_dir_contents "$p/GPUCache" "brave gpu cache"
+		remove_literal_dir_contents "$p/DawnWebGPUCache" "brave dawn webgpu cache"
+		remove_literal_dir_contents "$p/DawnGraphiteCache" "brave dawn graphite cache"
+		remove_literal_dir_contents "$p/Code Cache" "brave code cache"
+		remove_literal_dir_contents "$p/Cache" "brave cache"
+		remove_literal_dir_contents "$p/Application Cache" "brave application cache"
+		remove_literal_dir_contents "$p/File System" "brave file system"
+		remove_literal_dir_contents "$p/blob_storage" "brave blob storage"
+	done
+
+	remove_literal_dir_contents \
+		"$base/config/BraveSoftware/Brave-Browser/ShaderCache" \
+		"brave ShaderCache"
+	remove_literal_dir_contents \
+		"$base/config/BraveSoftware/Brave-Browser/GrShaderCache" \
+		"brave GrShaderCache"
+	remove_literal_dir_contents \
+		"$base/config/BraveSoftware/Brave-Browser/Crash Reports" \
+		"brave Crash Reports"
+}
+
+clean_discord_cache() {
+	local base="$HOME/.var/app/com.discordapp.Discord"
+
+	[ ! -d "$base" ] && return 0
+
+	# Flatpak-level cache
+	remove_literal_dir_contents "$base/cache" "discord flatpak cache"
+
+	# Discord is Electron-based; these are pure cache/render junk, never
+	# the login token or account data (those live elsewhere in config).
+	remove_literal_dir_contents "$base/config/discord/Cache" "discord cache"
+	remove_literal_dir_contents "$base/config/discord/Code Cache" "discord code cache"
+	remove_literal_dir_contents "$base/config/discord/GPUCache" "discord gpu cache"
+	remove_literal_dir_contents "$base/config/discord/DawnWebGPUCache" "discord dawn webgpu cache"
+	remove_literal_dir_contents "$base/config/discord/DawnGraphiteCache" "discord dawn graphite cache"
+	remove_literal_dir_contents "$base/config/discord/Service Worker" "discord service worker"
+	remove_literal_dir_contents "$base/config/discord/blob_storage" "discord blob storage"
+	remove_literal_dir_contents "$base/config/discord/Crash Reports" "discord Crash Reports"
+}
+
+clean_spotify_cache() {
+	local base="$HOME/.var/app/com.spotify.Client"
+
+	[ ! -d "$base" ] && return 0
+
+	# Flatpak-level cache
+	remove_literal_dir_contents "$base/cache" "spotify flatpak cache"
+
+	# Spotify (Electron-based) cache/render junk only, never
+	# Users/<id>/prefs or the local credentials cache.
+	remove_literal_dir_contents "$base/config/spotify/Cache" "spotify cache"
+	remove_literal_dir_contents "$base/config/spotify/Code Cache" "spotify code cache"
+	remove_literal_dir_contents "$base/config/spotify/GPUCache" "spotify gpu cache"
+	remove_literal_dir_contents "$base/config/spotify/Service Worker" "spotify service worker"
+	remove_literal_dir_contents "$base/config/spotify/blob_storage" "spotify blob storage"
+	remove_literal_dir_contents "$base/config/spotify/Browser/Cache" "spotify browser cache"
+}
+
+clean_firefox() {
+	CURRENT_CATEGORY="firefox"
+	echo -e "${C_ORANGE}-- [firefox] cache only (safe) --${C_RESET}"
+	clean_firefox_cache
+}
+
+clean_brave() {
+	CURRENT_CATEGORY="brave"
+	echo -e "${C_ORANGE}-- [brave] cache only (safe) --${C_RESET}"
+	clean_brave_cache
+}
+
+clean_discord() {
+	CURRENT_CATEGORY="discord"
+	echo -e "${C_ORANGE}-- [discord] cache only (safe) --${C_RESET}"
+	clean_discord_cache
+}
+
+clean_spotify() {
+	CURRENT_CATEGORY="spotify"
+	echo -e "${C_ORANGE}-- [spotify] cache only (safe) --${C_RESET}"
+	clean_spotify_cache
+}
+
+clean_extreme() {
+	CURRENT_CATEGORY="extreme"
+
+	local any_app_flag=0
+	[ "$EXTREME_FIREFOX" -eq 1 ] && any_app_flag=1
+	[ "$EXTREME_BRAVE" -eq 1 ]   && any_app_flag=1
+	[ "$EXTREME_DISCORD" -eq 1 ] && any_app_flag=1
+	[ "$EXTREME_SPOTIFY" -eq 1 ] && any_app_flag=1
+
+	echo -e "${C_RED}-- [extreme] FULL profile wipe (history/logins/sessions) --${C_RESET}"
+
+	# No --firefox/--brave/--discord/--spotify given alongside --extreme:
+	# fall back to wiping every supported app (old "purge everything"
+	# behavior), still one confirmation prompt per app.
+	if [ "$any_app_flag" -eq 0 ]; then
+		EXTREME_FIREFOX=1
+		EXTREME_BRAVE=1
+		EXTREME_DISCORD=1
+		EXTREME_SPOTIFY=1
+		echo -e "${C_YELLOW}No app flag given with --extreme: targeting all supported apps (firefox, brave, discord, spotify).${C_RESET}"
 	fi
 
-	if [ "$DEFAULT_PURGE_BRAVE" -eq 1 ]; then
-		purge_app_dir "Brave" "$HOME/.var/app/com.brave.Browser"
+	if [ "$EXTREME_FIREFOX" -eq 1 ]; then
+		extreme_wipe_app_dir "Firefox" "$HOME/.var/app/org.mozilla.firefox"
 	fi
 
-	if [ "$DEFAULT_PURGE_DISCORD" -eq 1 ]; then
-		purge_app_dir "Discord" "$HOME/.var/app/com.discordapp.Discord"
+	if [ "$EXTREME_BRAVE" -eq 1 ]; then
+		extreme_wipe_app_dir "Brave" "$HOME/.var/app/com.brave.Browser"
 	fi
 
-	if [ "$DEFAULT_PURGE_SPOTIFY" -eq 1 ]; then
-		purge_app_dir "Spotify" "$HOME/.var/app/com.spotify.Client"
+	if [ "$EXTREME_DISCORD" -eq 1 ]; then
+		extreme_wipe_app_dir "Discord" "$HOME/.var/app/com.discordapp.Discord"
+	fi
+
+	if [ "$EXTREME_SPOTIFY" -eq 1 ]; then
+		extreme_wipe_app_dir "Spotify" "$HOME/.var/app/com.spotify.Client"
 	fi
 }
 
@@ -736,7 +1075,10 @@ run_only_category() {
 		python)  clean_python ;;
 		vscode)  clean_vscode ;;
 		chrome)  clean_chrome ;;
-		purge)   clean_purge ;;
+		firefox) clean_firefox ;;
+		brave)   clean_brave ;;
+		discord) clean_discord ;;
+		spotify) clean_spotify ;;
 	esac
 }
 
@@ -745,11 +1087,14 @@ run_default_clean() {
 	clean_python
 	clean_vscode
 	clean_chrome
-	clean_purge
+	[ "$DEFAULT_CACHE_FIREFOX" -eq 1 ] && clean_firefox
+	[ "$DEFAULT_CACHE_BRAVE" -eq 1 ]   && clean_brave
+	[ "$DEFAULT_CACHE_DISCORD" -eq 1 ] && clean_discord
+	[ "$DEFAULT_CACHE_SPOTIFY" -eq 1 ] && clean_spotify
 }
 
-run_purge_only() {
-	clean_purge
+run_extreme() {
+	clean_extreme
 }
 
 ###############################################################################
@@ -776,11 +1121,15 @@ print_summary() {
 	echo "Targets touched: $TOTAL_TARGETS"
 	echo
 
-	print_summary_line "general" "$GENERAL_FOUND" "$GENERAL_FREED"
-	print_summary_line "python"  "$PYTHON_FOUND"  "$PYTHON_FREED"
-	print_summary_line "vscode"  "$VSCODE_FOUND"  "$VSCODE_FREED"
-	print_summary_line "chrome"  "$CHROME_FOUND"  "$CHROME_FREED"
-	print_summary_line "purge"   "$PURGE_FOUND"   "$PURGE_FREED"
+	print_summary_line "general"  "$GENERAL_FOUND"  "$GENERAL_FREED"
+	print_summary_line "python"   "$PYTHON_FOUND"   "$PYTHON_FREED"
+	print_summary_line "vscode"   "$VSCODE_FOUND"   "$VSCODE_FREED"
+	print_summary_line "chrome"   "$CHROME_FOUND"   "$CHROME_FREED"
+	print_summary_line "firefox"  "$FIREFOX_FOUND"  "$FIREFOX_FREED"
+	print_summary_line "brave"    "$BRAVE_FOUND"    "$BRAVE_FREED"
+	print_summary_line "discord"  "$DISCORD_FOUND"  "$DISCORD_FREED"
+	print_summary_line "spotify"  "$SPOTIFY_FOUND"  "$SPOTIFY_FREED"
+	print_summary_line "extreme"  "$EXTREME_FOUND"  "$EXTREME_FREED"
 
 	echo
 	if [ "$DRY_RUN" -eq 1 ]; then
@@ -809,9 +1158,9 @@ fi
 
 # --analyze is a read-only report. If it's the only thing requested,
 # stop here: never delete anything just because --analyze was passed.
-if [ "$ANALYZE" -eq 1 ] && [ -z "$ONLY_CATEGORY" ] && [ "$PURGE_ONLY" -ne 1 ] \
+if [ "$ANALYZE" -eq 1 ] && [ -z "$ONLY_CATEGORY" ] \
 	&& [ "$DEFAULT_RUN" -ne 1 ] && [ "$DRY_RUN" -ne 1 ] && [ "$PRINT_ITEMS" -ne 1 ] \
-	&& [ "$NO_PURGE" -ne 1 ] && [ "$AUTO_YES" -ne 1 ]; then
+	&& [ "$AUTO_YES" -ne 1 ] && [ "$EXTREME" -ne 1 ]; then
 	exit 0
 fi
 
@@ -822,8 +1171,15 @@ echo -e "${C_RED}\n -- Cleaning ...\n${C_RESET}"
 
 if [ -n "$ONLY_CATEGORY" ]; then
 	run_only_category
-elif [ "$PURGE_ONLY" -eq 1 ]; then
-	run_purge_only
+elif [ "$EXTREME_ONLY" -eq 1 ]; then
+	# --extreme on its own (no --default/-d): run ONLY the extreme wipe,
+	# nothing else gets touched.
+	run_extreme
+elif [ "$EXTREME" -eq 1 ]; then
+	# --extreme combined with --default/-d: run the full safe clean,
+	# then also run the extreme wipe.
+	run_default_clean
+	run_extreme
 else
 	run_default_clean
 fi
