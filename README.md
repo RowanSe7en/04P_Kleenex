@@ -21,13 +21,13 @@
 
 Disk-space cleanup script for **1337/42 Ubuntu PCs**. Made by Bilal Rouane (42 intra: `brouane`).
 
-It clears out caches, junk, and trash across your `$HOME`, with category-based cleaning that's **safe by default** — the normal run only ever deletes regenerable cache/junk, never your browser logins, chat tokens, or history. A separate, explicitly opt-in `--extreme` mode exists for anyone who actually wants to wipe an app's entire profile data.
+Clears out caches, junk, and trash across your `$HOME` with category-based cleaning that is **safe by default** — the normal run only ever deletes regenerable cache and junk, never your logins, history, cookies, passwords, sessions, or extension settings. A separate, explicitly opt-in `--wipe` mode exists for anyone who wants to fully wipe an app's entire profile data.
 
 ## Clone & setup
 
 ```bash
-git clone <repo_url>
-cd <repo_folder>
+git clone https://github.com/RowanSe7en/004_PERSONAL_Magic_Cleaner
+cd 004_PERSONAL_Magic_Cleaner
 chmod +x Magic_Cleaner
 ```
 
@@ -39,182 +39,245 @@ Show usage:
 
 *(running with no arguments shows the same thing as `--help`)*
 
-Run the full default clean:
+Run the full default safe clean:
 
 ```bash
-./Magic_Cleaner --default
+./Magic_Cleaner --safe
 ```
 
 ## Options
 
 | Flag | Short | Description |
 |---|---|---|
-| `--default` | `-d` | Run the full default SAFE clean: `general + python + vscode + chrome + firefox + brave + discord + spotify` (caches only, plus misc caches under `general` — see below) |
+| `--safe` | `-s` | Run the full default safe clean (see [what it cleans](#what--safe--s-cleans)) |
+| `--safe-dry-run` | `-sdr` | Show what would be deleted, delete nothing |
+| `--print` | `-p` | Print each target path before deleting it |
+| `--analyze` | `-a` | Report-only: show biggest space consumers in `$HOME` plus disk usage. Deletes nothing. |
+| `--only CATEGORY` | `-o CATEGORY` | Run exactly one category: `general`, `python`, `vscode`, `chrome`, `firefox`, `brave`, `discord`, `spotify`, `zen` |
+| `--wipe` | `-w` | **DANGEROUS.** Fully wipe one or more apps' entire profile data. See [Wipe mode](#wipe-mode---wipe--w) below. |
+| `--firefox` | | With `--wipe`: target Firefox |
+| `--brave` | | With `--wipe`: target Brave |
+| `--discord` | | With `--wipe`: target Discord |
+| `--spotify` | | With `--wipe`: target Spotify |
+| `--zen` | | With `--wipe`: target Zen Browser |
+| `--chrome` | | With `--wipe`: target Chrome |
+| `--vscode` | | With `--wipe`: target VS Code |
+| `--yes` | `-y` | Auto-confirm wipe prompts (no `[y/N]` asked) |
 | `--help` | `-h` | Show usage |
-| `--dry-run` | `-dr` | Show what would be deleted, deletes nothing |
-| `--print` | `-p` | Print each target as it's processed |
-| `--analyze` | `-a` | Report-only: show biggest space consumers in `$HOME`. Deletes nothing. |
-| `--only CATEGORY` | `-o CATEGORY` | Run a single category: `general`, `python`, `vscode`, `chrome`, `firefox`, `brave`, `discord`, `spotify` |
-| `--extreme` | `-e` | **DANGEROUS.** Fully wipe one or more apps' entire profile data (history, passwords, sessions, saved logins — everything). Never runs as part of the default clean. See [`--extreme` mode](#--extreme-mode---e-what-it-actually-is) below. |
-| `--firefox` | | With `--extreme`: target Firefox |
-| `--brave` | | With `--extreme`: target Brave |
-| `--discord` | | With `--extreme`: target Discord |
-| `--spotify` | | With `--extreme`: target Spotify |
-| `--yes` | `-y` | Auto-confirm extreme-wipe prompts (no `[y/N]` asked) |
 
-Every flag above works **standalone** — none of them need `--default`/`-d` to do something. `-d` is only there if you want to be explicit about running the full default clean.
+Every flag works **standalone** — none of them need `--safe`/`-s` to do something. `-s` is only there if you want to be explicit. Standalone flags that don't pick a specific scope fall back to the full default safe clean (same as `--safe`).
 
-`--extreme`/`-e` also accepts the typo-tolerant aliases `--extreem`, `-extreme`, and `-extreem`, in case you fat-finger it — all four behave identically.
+`--wipe`/`-w` also accepts the typo-tolerant aliases `--extreem`, `-wipe`, and `-extreem`.
 
 ### Examples
 
 ```bash
-./Magic_Cleaner                      # no args: shows usage/help, does nothing else
-./Magic_Cleaner --default            # default: general + python + vscode + chrome + firefox/brave/discord/spotify caches
-./Magic_Cleaner --dry-run            # preview the default run, nothing deleted
-./Magic_Cleaner -dr                  # same as --dry-run
-./Magic_Cleaner --analyze            # report biggest space hogs, then exit — nothing deleted
-./Magic_Cleaner -a -d                # report biggest space hogs, then run the default clean
-./Magic_Cleaner --only vscode        # clean just VS Code
-./Magic_Cleaner -o firefox           # clean just Firefox's cache
-./Magic_Cleaner --extreme --brave    # DANGEROUS: fully wipe Brave's profile data
-./Magic_Cleaner -e --discord         # DANGEROUS: fully wipe Discord's profile data
-./Magic_Cleaner --extreme --brave --discord   # wipe both Brave and Discord
-./Magic_Cleaner --extreme --yes      # DANGEROUS: wipes ALL FOUR supported apps, no prompts
+./Magic_Cleaner                        # no args: shows usage/help, does nothing
+./Magic_Cleaner --safe                 # full safe clean
+./Magic_Cleaner --safe-dry-run         # preview everything, delete nothing
+./Magic_Cleaner -sdr                   # same as --safe-dry-run
+./Magic_Cleaner --analyze              # report biggest space hogs, exit — nothing deleted
+./Magic_Cleaner -a -s                  # report space hogs, then run the full safe clean
+./Magic_Cleaner --only vscode          # clean only VS Code
+./Magic_Cleaner -o zen                 # clean only Zen Browser's cache
+./Magic_Cleaner --wipe --brave         # DANGEROUS: fully wipe Brave's entire profile
+./Magic_Cleaner -w --discord           # DANGEROUS: fully wipe Discord's entire profile
+./Magic_Cleaner --wipe --brave --discord --zen   # wipe all three
+./Magic_Cleaner --wipe --chrome --vscode         # wipe Chrome and VS Code
+./Magic_Cleaner --wipe --yes           # DANGEROUS: wipe ALL 7 supported apps, no prompts
 ```
 
 ## Modes
 
 - **No arguments** — shows the same usage/help text as `--help`/`-h` and exits. Nothing is cleaned.
-- **`--default` / `-d`** — runs all eight categories in order: `general → python → vscode → chrome → firefox → brave → discord → spotify`. Every one of these is cache/junk-only; nothing destructive runs here.
-- **`--only` / `-o` `CATEGORY`** — runs exactly one category, skips the rest. Standalone, no `--default` needed. Valid categories: `general`, `python`, `vscode`, `chrome`, `firefox`, `brave`, `discord`, `spotify`.
-- **`--dry-run` / `-dr`** — runs the full selected scope but never calls `rm`; just reports what *would* be freed. Also auto-confirms any `--extreme` prompts (since nothing is actually deleted). Standalone — running `./Magic_Cleaner --dry-run` on its own previews the **default** clean.
-- **`--print` / `-p`** / **`--yes` / `-y`** — same standalone rule: used alone with no other flag, each runs the **default** clean (printing every target, or auto-confirming extreme prompts if extreme also happens to be running, respectively).
-- **`--analyze` / `-a`** — **read-only**, and the only flag that does *not* fall back to the default clean on its own. Used by itself it dumps the largest items under `~/.var/app`, `~/.cache`, `~/.config`, `~/.local/share`, and top-level `$HOME`, sorted by size, then **exits immediately — nothing is ever deleted just because `--analyze` was passed**. Combine it with any other action (e.g. `-a -d`, `--analyze --only chrome`) to see the report first and then have that action run right after.
-- **`--extreme` / `-e`** — **the only destructive, whole-profile-wipe mode in the script.** Never runs as part of the default clean, and never runs at all unless you pass it explicitly. See the dedicated section below.
-- **No flag does anything destructive except `--extreme`** — every category in the default clean (`general`, `python`, `vscode`, `chrome`, `firefox`, `brave`, `discord`, `spotify`) only ever removes caches and junk that the respective app or tool regenerates on its own.
+- **`--safe` / `-s`** — runs all nine categories in order: `general → python → vscode → chrome → firefox → brave → discord → spotify → zen`. Every category is cache/junk-only; nothing destructive runs here.
+- **`--only` / `-o` `CATEGORY`** — runs exactly one category, skips the rest. Valid values: `general`, `python`, `vscode`, `chrome`, `firefox`, `brave`, `discord`, `spotify`, `zen`.
+- **`--safe-dry-run` / `-sdr`** — runs the full selected scope but never calls `rm`; reports what *would* be freed. Also auto-skips wipe confirmation prompts (since nothing is actually deleted). Used alone it previews the **full default safe clean**.
+- **`--print` / `-p`** — prints every target path as it's processed. Used alone it runs the **full default safe clean** with per-target output.
+- **`--analyze` / `-a`** — **read-only**, the only flag that does *not* fall back to the default clean on its own. Used alone it reports the largest items under `~/.var/app`, `~/.cache`, `~/.config`, `~/.local/share`, and top-level `$HOME`, sorted by size, plus total/used/available disk space — then **exits immediately without deleting anything**. Combine with any other action (e.g. `-a -s`, `--analyze --only chrome`) to see the report first, then have that action run right after.
+- **`--wipe` / `-w`** — the only destructive mode. Never runs as part of `--safe`. See [Wipe mode](#wipe-mode---wipe--w) below.
 
 ### Mixing flags
 
-Flags combine the way you'd expect — each one tweaks *how* the run behaves, and you can stack as many as apply:
-
 ```bash
-./Magic_Cleaner -d -p                       # default clean, print every target
-./Magic_Cleaner --only firefox --dry-run    # preview only what Firefox's cache cleanup would remove
-./Magic_Cleaner --extreme --spotify -y -dr  # preview an extreme Spotify wipe with no prompts (dry-run already skips prompts)
-./Magic_Cleaner --analyze --only vscode     # report space hogs, then clean only vscode
-./Magic_Cleaner -d --extreme --brave        # run the full safe default clean, then ALSO extreme-wipe Brave
+./Magic_Cleaner -s -p                          # safe clean, print every target
+./Magic_Cleaner --only firefox --safe-dry-run  # preview Firefox cache cleanup only
+./Magic_Cleaner -a --only chrome               # disk report, then clean Chrome only
+./Magic_Cleaner -s --wipe --brave              # safe clean first, then wipe Brave
+./Magic_Cleaner --wipe --spotify -sdr          # preview what a Spotify wipe would remove
 ```
 
-A few rules of thumb when mixing:
-- `--only`/`-o` takes priority over everything else if present: if you pass `--only CATEGORY` together with `--extreme` (and any app flags), only that one safe category runs — `--extreme` is silently ignored in that case. To run an extreme wipe, don't combine it with `--only`.
-- `--firefox` / `--brave` / `--discord` / `--spotify` **only make sense together with `--extreme`/`-e`**. Using any of them without `--extreme` is a hard error — the script prints `--firefox/--brave/--discord/--spotify require --extreme` and exits.
-- `--extreme` on its own (no `--default`/`-d`) runs **only** the extreme wipe — nothing else gets touched, not even the safe categories.
-- `--extreme` combined with `--default`/`-d` runs the **full safe default clean first**, then **also** runs the extreme wipe afterward. Both happen.
-- If `--extreme` is given with **none** of `--firefox`/`--brave`/`--discord`/`--spotify`, it wipes **all four** supported apps — the script prints a warning (`No app flag given with --extreme: targeting all supported apps...`) and proceeds. Be careful with `--extreme --yes` on its own for exactly this reason.
-- `--yes`/`-y` only matters for the extreme-wipe confirmation prompt — it's silently irrelevant if `--extreme` isn't running.
-- `--dry-run`/`-dr` makes `--yes`/`-y` moot for extreme mode: dry-run already never prompts and never deletes, with or without `--yes`.
-- `--analyze`/`-a` stacked with anything else still runs that other thing afterward; it's only "report and stop" when it's the *only* flag given.
+Rules of thumb when mixing:
 
-## What it deletes, by category
+- **`--only` takes priority over everything.** If `--only CATEGORY` is present, only that one category runs — `--wipe` is silently ignored when combined with `--only`.
+- **`--wipe` alone** (no `--safe`/`-s`) runs only the wipe — no safe categories are touched.
+- **`--wipe` + `--safe`/`-s`** runs the full safe clean first, then the wipe afterward.
+- **`--firefox`/`--brave`/`--discord`/`--spotify`/`--zen`/`--chrome`/`--vscode` require `--wipe`**. Using any of them without `--wipe` is a hard error: the script prints an error message and exits.
+- **`--wipe` with no app flag** wipes all seven supported apps (prints a warning first). Be careful combining this with `--yes`.
+- **`--yes`/`-y`** only matters for `--wipe` confirmation prompts. It's irrelevant if `--wipe` isn't running.
+- **`--safe-dry-run`/`-sdr`** makes `--yes`/`-y` moot: dry-run never prompts and never deletes, with or without `--yes`.
+- **`--analyze`/`-a`** combined with any other flag still runs that other flag; it only exits early when it's the *sole* flag given.
 
-Every single path-based target below is **safe to run even if it doesn't exist** on your machine — the script checks first and silently skips anything missing or empty. Nothing here errors out just because an app isn't installed.
+## What `--safe` / `-s` cleans
+
+Every path is checked before anything is touched. Missing files and directories are silently skipped — no errors, no warnings.
 
 ### `general`
-Cross-cutting junk, trash, and miscellaneous app caches:
-- `~/.42*` and `~/.zcompdump*` (42 / shell leftovers)
-- `~/.local/share/Trash/files/*` and `Trash/info/*`
-- `~/.cache/*` (general cache, includes `~/.cache/thumbnails/*`)
-- `~/.thumbnails/*` (old-style thumbnail cache)
+
+Cross-cutting junk, trash, and miscellaneous app caches. Runs first in every default clean.
+
+- `~/.42*` and `~/.zcompdump*` — 42/shell leftovers
+- `~/.local/share/Trash/files/*` and `Trash/info/*` — Trash
+- `~/.cache/*` — general cache (includes `~/.cache/thumbnails/*`)
+- `~/.thumbnails/*` — old-style thumbnail cache
 - Desktop junk: stray `.DS_Store` files, `Piscine Rules *.mp4`, `PLAY_ME.webloc`
-- **Obsidian** (`~/.config/obsidian`): `Cache`, `Code Cache`, `GPUCache`, `DawnGraphiteCache`, `DawnWebGPUCache`, `Shared Dictionary/cache` — your vault content is never touched
-- **Prism Launcher** (`~/.local/share/PrismLauncher`): `cache/*`, `logs/*` — your instances are never touched
+- `/tmp/*` — any file/dir in `/tmp` that you own
+- Stray `*.log` and `LOG.old` files anywhere under `$HOME` — **except** inside `~/.config/*` and `~/.var/app/*/config/*`, because some databases (LevelDB, used by Chrome/Brave/Electron apps for extension storage and IndexedDB) name their live uncommitted data files `*.log`. Deleting those corrupts or resets the database. Real disposable log files (build output, app logs, project dirs) are almost always outside these config trees, so the exclusion is safe.
+- **Obsidian** (`~/.config/obsidian`): `Cache`, `Code Cache`, `GPUCache`, `DawnGraphiteCache`, `DawnWebGPUCache`, `Shared Dictionary/cache` — vault content is never touched
+- **Prism Launcher** (`~/.local/share/PrismLauncher`): `cache/*`, `logs/*` — instances are never touched
 - **GNOME Extension Manager** (`~/.var/app/com.mattjakeman.ExtensionManager`): `cache/*`
 - **Clipboard history** (`~/.cache/clipboard-history@alexsaveau.dev`): cleared entirely
-- Every stray `*.log` and `LOG.old` file found anywhere under `$HOME`
-- Any file/dir in `/tmp` that you own
 
 ### `python`
-Dev/package caches:
-- `pip`, `pytest`, `mypy`, `ruff`, `uv` caches
-- `npm`, `yarn`, `pnpm` caches
-- `cargo` registry/git cache, `gem` cache
-- Every `__pycache__` and `.pytest_cache` folder under `$HOME` — **except** any path inside a `.venv` (those are never touched)
-- Every stray `*.pyc` and `*.pyo` file found anywhere under `$HOME` — **except** inside a `.venv`
 
-### `vscode` (Flatpak install only — `~/.var/app/com.visualstudio.code`)
-- Flatpak cache, Code Cache, CachedData, **CachedProfilesData**, GPUCache, logs, Crashpad, Service Worker (and its `CacheStorage` subfolder specifically), Local/Session Storage, WebStorage, Dawn caches (`DawnWebGPUCache`/`DawnGraphiteCache`), `Shared Dictionary/cache`
-- `CachedExtensionVSIXs` (usually the biggest one)
-- `User/History` and `User/workspaceStorage`
-- **Keeps**: settings, keybindings, snippets, extensions themselves
+- `pip` cache (`~/.cache/pip`, `~/.local/share/pip-cache`)
+- `pytest` cache (`~/.cache/pytest`)
+- `mypy` cache (`~/.cache/mypy`)
+- `ruff` cache (`~/.cache/ruff`)
+- `uv` cache (`~/.cache/uv`)
+- `npm` cache (`~/.npm/_cacache`)
+- `yarn` cache (`~/.yarn/cache`)
+- `pnpm` cache (`~/.cache/pnpm`, `~/.local/share/pnpm/store`)
+- `cargo` registry and git cache (`~/.cargo/registry/cache`, `~/.cargo/git/db`)
+- `gem` cache (`~/.gem/ruby/*/cache`)
+- Every `__pycache__` directory under `$HOME` — **except** inside `.venv`
+- Every `.pytest_cache` directory under `$HOME` — **except** inside `.venv`
+- Every `*.pyc` and `*.pyo` file under `$HOME` — **except** inside `.venv`
 
-### `chrome` (Flatpak install only — `~/.var/app/com.google.Chrome`)
-- Flatpak cache, `BrowserMetrics` (+ `BrowserMetrics-spare.pma`), `component_crx_cache`, `optimization_guide_model_store`, `extensions_crx_cache`, `ShaderCache`/`GrShaderCache`, `Crash Reports` (+ `CrashpadMetrics-active.pma`), `segmentation_platform`, `OnDeviceHeadSuggestModel`, `GraphiteDawnCache`, `GPUPersistentCache`, `Safe Browsing`, `Crashpad`, `WasmTtsEngine`, `CertificateRevocation`, `ZxcvbnData`, `ActorSafetyLists`, `OptimizationHints`, `PKIMetadata`, `Crowd Deny`, `SafetyTips`, `hyphen-data`
-- Per-profile (every `Default` and `Profile*` folder): Service Worker (+ its `CacheStorage` and `ScriptCache` subfolders specifically), GPUCache, Dawn caches, Code Cache, Cache, Application Cache, File System, blob_storage, `Shared Dictionary/cache`
-- Cache only — **bookmarks, history, passwords, logins are never touched**
+### `vscode` (Flatpak — `~/.var/app/com.visualstudio.code`)
 
-### `firefox` (Flatpak install only — `~/.var/app/org.mozilla.firefox`)
 - Flatpak-level cache
-- Per-profile (every `*.default*` profile folder): `cache2`, `startupCache`, `shader-cache`, `thumbnails`, `OfflineCache`
-- Cache only — **`places.sqlite` (history/bookmarks), `logins.json` (saved passwords), cookies, and `sessionstore` are never touched**
+- `Code/Cache`, `Code/CachedData`, `Code/CachedProfilesData`
+- `Code/GPUCache`, `Code/DawnWebGPUCache`, `Code/DawnGraphiteCache`
+- `Code/logs`, `Code/Crashpad`
+- `Code/Service Worker/CacheStorage` and `Code/Service Worker/ScriptCache` — **only these two subdirs**, never the whole `Service Worker/` folder (`ServiceWorkerDatabase` inside it holds service worker registration metadata for extension background workers)
+- `Code/Shared Dictionary/cache`
+- `Code/CachedExtensionVSIXs` — usually the biggest item
+- `Code/User/History`, `Code/User/workspaceStorage`
+- **Never touched:** `Code/Local Storage/`, `Code/Session Storage/`, `Code/WebStorage/` (extension webviews can persist real settings there), user settings, keybindings, snippets, extensions themselves
 
-### `brave` (Flatpak install only — `~/.var/app/com.brave.Browser`)
+### `chrome` (Flatpak — `~/.var/app/com.google.Chrome`)
+
+Top-level:
 - Flatpak-level cache
-- `ShaderCache`, `GrShaderCache`, `Crash Reports`
-- Per-profile (every `Default` and `Profile*` folder, Chromium-style): Service Worker, GPUCache, Dawn caches, Code Cache, Cache, Application Cache, File System, blob_storage
-- Cache only — **`Login Data`, `History`, `Cookies`, and `Sessions` are never touched**
+- `BrowserMetrics/`, `BrowserMetrics-spare.pma`
+- `component_crx_cache/`, `optimization_guide_model_store/`
+- `ShaderCache/`, `GrShaderCache/`
+- `Crash Reports/`, `CrashpadMetrics-active.pma`
+- `segmentation_platform/`, `OnDeviceHeadSuggestModel/`
+- `GraphiteDawnCache/`, `GPUPersistentCache/`
+- `Safe Browsing/`, `Crashpad/`, `WasmTtsEngine/`
+- `CertificateRevocation/`, `ZxcvbnData/`, `ActorSafetyLists/`
+- `OptimizationHints/`, `PKIMetadata/`, `Crowd Deny/`, `SafetyTips/`, `hyphen-data/`
 
-### `discord` (Flatpak install only — `~/.var/app/com.discordapp.Discord`)
+Per-profile (`Default/` and every `Profile */`):
+- `Service Worker/CacheStorage/` and `Service Worker/ScriptCache/` — **only these two subdirs** (`ServiceWorkerDatabase` is never touched)
+- `GPUCache/`, `DawnWebGPUCache/`, `DawnGraphiteCache/`
+- `Code Cache/`, `Cache/`, `Application Cache/`
+- `blob_storage/`, `Shared Dictionary/cache/`
+- **Never touched:** `File System/` (used by sandboxed Filesystem API), `Extension State/`, `Local Extension Settings/`, `Extension Scripts/`, history, bookmarks, cookies, passwords, login data, extensions themselves
+- **`extensions_crx_cache/` is intentionally not cleaned** — it sits adjacent to extension install/update bookkeeping and was found to reset extension settings on some machines
+
+### `firefox` (Flatpak — `~/.var/app/org.mozilla.firefox`)
+
 - Flatpak-level cache
-- `Cache`, `Code Cache`, `GPUCache`, `DawnWebGPUCache`, `DawnGraphiteCache`, `Service Worker`, `blob_storage`, `Crash Reports`
-- Cache/render junk only — **your login token and account data are never touched**
+- Per-profile (`*.default*`): `cache2/`, `startupCache/`, `shader-cache/`, `thumbnails/`, `OfflineCache/`
+- **Never touched:** `places.sqlite` (history/bookmarks), `logins.json` (saved passwords), cookies, sessionstore, preferences
 
-### `spotify` (Flatpak install only — `~/.var/app/com.spotify.Client`)
+### `brave` (Flatpak — `~/.var/app/com.brave.Browser`)
+
 - Flatpak-level cache
-- `Cache`, `Code Cache`, `GPUCache`, `Service Worker`, `blob_storage`, `Browser/Cache`
-- Cache/render junk only — **your saved credentials/local prefs are never touched**
+- `ShaderCache/`, `GrShaderCache/`, `Crash Reports/`
+- Per-profile (`Default/` and every `Profile */`):
+  - `Service Worker/CacheStorage/` and `Service Worker/ScriptCache/` — only these two subdirs
+  - `GPUCache/`, `DawnWebGPUCache/`, `DawnGraphiteCache/`
+  - `Code Cache/`, `Cache/`, `Application Cache/`, `blob_storage/`
+  - **`File System/` is intentionally not cleaned** (backs sandboxed Filesystem API, extensions/web apps can persist real data there)
+- **Never touched:** Login Data, History, Cookies, Sessions, extension settings/storage
 
-## `--extreme` mode (`-e`): what it actually is
+### `discord` (Flatpak — `~/.var/app/com.discordapp.Discord`)
 
-`--extreme` is the odd one out: every category above only ever deletes **caches and junk** that an app regenerates on its own. `--extreme` instead **fully and permanently deletes an entire app's local data directory**, including things that are *not* regenerated: saved logins, profiles, settings, history, extensions, local message/chat data, downloaded files inside the app sandbox — everything that app has ever stored under its Flatpak data dir.
+- Flatpak-level cache
+- `discord/Cache/`, `discord/Code Cache/`, `discord/GPUCache/`
+- `discord/DawnWebGPUCache/`, `discord/DawnGraphiteCache/`
+- `discord/Service Worker/CacheStorage/` and `discord/Service Worker/ScriptCache/` — only these two subdirs
+- `discord/blob_storage/`, `discord/Crash Reports/`
+- **Never touched:** login token, account data
 
-It targets exactly these four apps, each skipped automatically if not installed:
-- Firefox (`~/.var/app/org.mozilla.firefox`)
-- Brave (`~/.var/app/com.brave.Browser`)
-- Discord (`~/.var/app/com.discordapp.Discord`)
-- Spotify (`~/.var/app/com.spotify.Client`)
+### `spotify` (Flatpak — `~/.var/app/com.spotify.Client`)
 
-`--extreme` **never** runs on its own — you must pass it explicitly, and it **never** runs as part of `--default`/`-d` unless you also add `--extreme` to that same command.
+- Flatpak-level cache
+- `spotify/Cache/`, `spotify/Code Cache/`, `spotify/GPUCache/`
+- `spotify/Service Worker/CacheStorage/` and `spotify/Service Worker/ScriptCache/` — only these two subdirs
+- `spotify/blob_storage/`, `spotify/Browser/Cache/`
+- **Never touched:** saved credentials, local preferences
 
-You pick which app(s) to wipe with `--firefox` / `--brave` / `--discord` / `--spotify` (combine as many as you like). If you pass `--extreme` with **none** of those app flags, it wipes **all four** apps — the script will warn you (`No app flag given with --extreme: targeting all supported apps...`) before doing it.
+### `zen` (Flatpak — `~/.var/app/app.zen_browser.zen`)
 
-Because this is destructive in a way nothing else in the script is, every app gets its own interactive prompt before it's touched:
+Zen Browser is Firefox-based (Gecko engine), so the layout mirrors Firefox exactly.
+
+- Flatpak-level cache
+- Per-profile (`*.default*` under `.zen/` or `zen/`): `cache2/`, `startupCache/`, `shader-cache/`, `thumbnails/`, `OfflineCache/`
+- **Never touched:** `places.sqlite`, `logins.json`, cookies, sessionstore, `zen-themes.json`, preferences
+
+## Wipe mode (`--wipe` / `-w`)
+
+`--wipe` is the only destructive mode in the script. Unlike every safe category above (which only removes regenerable cache and junk), `--wipe` **permanently deletes an entire app's local Flatpak data directory**, including everything that is *not* regenerated: saved logins, history, settings, keybindings, snippets, installed extensions, bookmarks, cookies, sessions — everything the app has ever stored.
+
+**`--wipe` never runs unless you pass it explicitly.** It never runs as part of `--safe`/`-s`. It never uninstalls the app itself — the app stays installed, only its data is gone.
+
+### Supported apps for `--wipe`
+
+| App flag | Directory wiped |
+|---|---|
+| `--firefox` | `~/.var/app/org.mozilla.firefox` |
+| `--brave` | `~/.var/app/com.brave.Browser` |
+| `--discord` | `~/.var/app/com.discordapp.Discord` |
+| `--spotify` | `~/.var/app/com.spotify.Client` |
+| `--zen` | `~/.var/app/app.zen_browser.zen` |
+| `--chrome` | `~/.var/app/com.google.Chrome` |
+| `--vscode` | `~/.var/app/com.visualstudio.code` |
+
+Combine as many app flags as you like: `--wipe --brave --discord --zen`. If you pass `--wipe` with **no app flag**, it targets all seven apps — the script prints a warning before doing so.
+
+Before wiping each app, the script shows its size and asks for confirmation:
 
 ```
-[EXTREME] About to fully wipe Brave (history, logins, sessions, everything):
+[WIPE] About to fully wipe Brave (history, logins, sessions, everything):
   /home/you/.var/app/com.brave.Browser
   Size: 1.2G
 Continue? [y/N]
 ```
 
-Flags that change how `--extreme` behaves:
+### Flags that affect `--wipe`
 
-| Flag | Effect on `--extreme` |
+| Flag | Effect |
 |---|---|
-| `--extreme` alone (no app flags, no `-d`) | Wipes **all four** supported apps, with a `[y/N]` prompt per app, and nothing else runs |
-| `--extreme --firefox` / `--brave` / `--discord` / `--spotify` | Wipes only the app(s) named; combine multiple flags to wipe more than one |
-| `--extreme -d` (or `--default`) | Runs the full safe default clean **and then** the extreme wipe afterward |
-| `--yes` / `-y` | Auto-confirms every extreme prompt — no `[y/N]` asked, apps are wiped immediately |
-| `--dry-run` / `-dr` | Reports each targeted app's size as if it would be wiped, asks no prompt, deletes nothing |
-| `--firefox`/`--brave`/`--discord`/`--spotify` used **without** `--extreme` | **Error** — script prints `--firefox/--brave/--discord/--spotify require --extreme` and exits |
+| `--wipe` alone (no app flags, no `-s`) | Targets all 7 apps, `[y/N]` prompt per app, nothing else runs |
+| `--wipe --firefox` (or any combo of app flags) | Targets only the named app(s) |
+| `--wipe -s` (or `--safe`) | Runs the full safe clean first, then wipes the targeted app(s) |
+| `--yes` / `-y` | Skips all `[y/N]` prompts — wipes immediately |
+| `--safe-dry-run` / `-sdr` | Reports what would be wiped per app (size), asks no prompts, deletes nothing |
+| any app flag without `--wipe` | **Error** — exits with a message |
 
-> **Docker is never touched.** No Docker cleanup is performed by this script, in any mode.
+## Safety guarantees
 
-## Safety notes
-
-- Every deletion path is size-checked first; nothing with 0 bytes or a non-existent path is touched/counted.
-- The entire default clean (`general`, `python`, `vscode`, `chrome`, `firefox`, `brave`, `discord`, `spotify`) is cache/junk-only by design — no saved logins, passwords, browser history, or chat/account data is ever touched by `--default`/`-d`, or by any `--only CATEGORY` run.
-- `--extreme`/`-e` is the **only** destructive, no-undo, whole-app-wipe mode in the script — it always asks for confirmation per app unless you pass `--yes` or `--dry-run`, and it never runs unless explicitly requested.
-- `--dry-run`/`-dr` walks the entire selected scope and reports sizes without calling `rm` anywhere, and never prompts for an extreme-mode confirmation.
-- `--analyze`/`-a` never deletes anything; used alone it reports and exits before any cleaning stage would start.
-- A summary table (found vs. freed, per category — `general`, `python`, `vscode`, `chrome`, `firefox`, `brave`, `discord`, `spotify`, `extreme`) is printed at the end of every run, along with available storage before and after, and — on real (non-dry-run) runs — the actual storage freed, measured as the disk-space delta before vs. after cleaning.
+- **Extension data is never touched** by any safe category. `Service Worker/` is only ever cleaned via its `CacheStorage/` and `ScriptCache/` subdirs — never as a whole folder, because `ServiceWorkerDatabase` inside it holds MV3 extension background worker registrations. `File System/`, `Extension State/`, `Local Extension Settings/`, and `Extension Scripts/` are never touched anywhere in the script.
+- **`*.log` exclusion inside config trees** — the stray-log sweep in `general` explicitly skips `~/.config/*` and `~/.var/app/*/config/*` because LevelDB (used by Chrome, Brave, Discord, Electron apps for IndexedDB and extension storage) names its live uncommitted data files `*.log`. Deleting them corrupts or silently resets those stores.
+- **`.venv` exclusion** — `__pycache__`, `.pytest_cache`, `*.pyc`, and `*.pyo` cleanup never touches anything inside a `.venv` directory.
+- **No app is ever uninstalled.** `--wipe` only deletes data under the Flatpak data directory. The app itself remains installed.
+- **Docker is never touched** in any mode.
+- Every deletion path is size-checked before anything is removed. Paths with 0 bytes or that don't exist are silently skipped.
+- `--safe-dry-run`/`-sdr` walks the full selected scope and reports sizes without calling `rm` anywhere, and skips all wipe confirmation prompts.
+- `--analyze`/`-a` never deletes anything — it only reads and reports.
+- A per-category summary (found vs. freed for `general`, `python`, `vscode`, `chrome`, `firefox`, `brave`, `discord`, `spotify`, `zen`, and `wipe`) is printed at the end of every run, along with available storage before and after, and the actual disk-space delta on real (non-dry-run) runs.

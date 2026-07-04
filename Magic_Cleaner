@@ -14,7 +14,7 @@
 # - Docker: untouched
 # - Firefox / Brave / Discord / Spotify / Zen: CACHE-ONLY by default
 #   (safe). Full wipe of their profile/login data (history, passwords,
-#   sessions, saved logins, etc.) ONLY happens under --extreme, and only
+#   sessions, saved logins, etc.) ONLY happens under --wipe, and only
 #   for apps you explicitly opt into (or all five if no app flag is
 #   given), with a confirmation prompt per app.
 # - Browser extensions are NEVER touched by any stage, anywhere in this
@@ -33,32 +33,32 @@
 #   Snap, apt, or otherwise) are never removed by any option here.
 #
 # Running with no arguments shows help (same as --help / -h).
-# Any other recognized option runs immediately on its own (no --default
-# needed): --dry-run/-dr, --print, --extreme/-e, --only/-o CATEGORY, and
+# Any other recognized option runs immediately on its own (no --safe
+# needed): --safe-dry-run/-sdr, --print, --wipe/-w, --only/-o CATEGORY, and
 # --yes all act standalone. Options that don't pick a specific stage
 # (--only) or an extreme-only run (--firefox/--brave/--discord/--spotify/
-# --zen without --default) fall back to the full default clean: general +
+# --zen without --safe) fall back to the full default clean: general +
 # python + vscode + chrome + firefox-cache + brave-cache + discord-cache +
 # spotify-cache + zen-cache + misc caches (Obsidian, Prism Launcher, GNOME
 # Extension Manager, clipboard history, stray logs/.pyc/.pyo, Trash).
-# Use --default / -d to run that full default clean explicitly.
+# Use --safe / -s to run that full default clean explicitly.
 #
 # --analyze / -a is read-only: used alone it only reports the biggest
 # space consumers in your HOME and exits, it never deletes anything. It
 # also reports total/used/available disk space on the filesystem behind
-# $HOME. Combine --analyze with another action (e.g. --analyze -d) to
+# $HOME. Combine --analyze with another action (e.g. --analyze -s) to
 # see the report before that action runs.
 #
 # SAFE vs EXTREME, in one sentence:
-#   -d cleans caches everywhere (including Firefox/Brave/Discord/Spotify/
+#   -s cleans caches everywhere (including Firefox/Brave/Discord/Spotify/
 #   Zen cache folders, plus Obsidian/Prism/clipboard-history/logs/etc.)
 #   and NEVER touches your saved logins/history/sessions.
-#   --extreme / -e is the only thing that deletes a whole app's profile
+#   --wipe / -w is the only thing that deletes a whole app's profile
 #   data, and you choose which app(s) with --firefox / --brave /
 #   --discord / --spotify / --zen (omit all of them to extreme-wipe
-#   every supported app). --extreme now also covers Chrome and VS Code:
+#   every supported app). --wipe now also covers Chrome and VS Code:
 #   their Flatpak data dirs are fully wiped too when targeted, not just
-#   their caches. --extreme NEVER uninstalls the app itself, only its
+#   their caches. --wipe NEVER uninstalls the app itself, only its
 #   data — the app stays installed.
 #
 # Every path-based cleanup target is safe to run even if the path
@@ -67,18 +67,18 @@
 #
 # Useful examples:
 #   ./Magic_Cleaner
-#   ./Magic_Cleaner --default
-#   ./Magic_Cleaner --dry-run
-#   ./Magic_Cleaner -dr
+#   ./Magic_Cleaner --safe
+#   ./Magic_Cleaner --safe-dry-run
+#   ./Magic_Cleaner -sdr
 #   ./Magic_Cleaner --analyze
-#   ./Magic_Cleaner -a -d
+#   ./Magic_Cleaner -a -s
 #   ./Magic_Cleaner --only vscode
 #   ./Magic_Cleaner -o zen
-#   ./Magic_Cleaner --extreme --brave
-#   ./Magic_Cleaner -e --discord
-#   ./Magic_Cleaner --extreme --brave --discord --zen
-#   ./Magic_Cleaner --extreme --chrome --vscode
-#   ./Magic_Cleaner --extreme --yes      # wipes ALL supported apps, no prompts
+#   ./Magic_Cleaner --wipe --brave
+#   ./Magic_Cleaner -w --discord
+#   ./Magic_Cleaner --wipe --brave --discord --zen
+#   ./Magic_Cleaner --wipe --chrome --vscode
+#   ./Magic_Cleaner --wipe --yes      # wipes ALL supported apps, no prompts
 
 ###############################################################################
 # SHELL / SAFETY
@@ -102,7 +102,7 @@ DEFAULT_CACHE_SPOTIFY=1
 DEFAULT_CACHE_ZEN=1
 
 # Apps fully wiped (entire profile dir, including logins/history/sessions)
-# ONLY when --extreme is used. These are just the "supported" list; which
+# ONLY when --wipe is used. These are just the "supported" list; which
 # of them actually run is controlled by EXTREME_* flags set from --firefox
 # / --brave / --discord / --spotify / --zen / --chrome / --vscode
 # (see FLAGS below).
@@ -232,44 +232,45 @@ usage() {
 Usage: $SCRIPT_NAME [options]
 
 Running with no arguments shows this help. Any option below runs on its
-own; --only/-o and --extreme/-e each run just their own stage, everything
-else (--dry-run, --print, --yes) falls back to the full default clean
-unless combined with --only/--extreme. --analyze/-a is read-only: used
+own; --only/-o and --wipe/-w each run just their own stage, everything
+else (--safe-dry-run, --print, --yes) falls back to the full default clean
+unless combined with --only/--wipe. --analyze/-a is read-only: used
 by itself it just prints the report and exits, it never deletes anything.
 
 Options:
-  --default, -d           Run the default SAFE clean: general + python +
-                          vscode + chrome-cache + firefox-cache + brave-cache +
-                          discord-cache + spotify-cache + zen-cache +
-                          misc caches (Obsidian, Prism Launcher, GNOME
-                          Extension Manager, clipboard history, stray
-                          logs/.pyc/.pyo, Trash). Never touches history,
-                          passwords, sessions, saved logins, or extension
-                          settings/storage.
-  --dry-run, -dr          Show what would be deleted, do not delete
+  --safe, -s              Safe cleanup (recommended): removes temporary files,
+                          caches, logs, Trash, Python cache (__pycache__,
+                          .pyc, .pyo, pip/uv/pytest/mypy), VS Code caches,
+                          browser caches (Chrome, Firefox, Brave, Discord,
+                          Spotify, Zen), and miscellaneous application caches
+                          (Obsidian, Prism Launcher, GNOME Extension Manager,
+                          clipboard history). Never deletes history,
+                          bookmarks, cookies, passwords, sessions, saved
+                          logins, extensions, or extension settings.
+  --safe-dry-run, -sdr    Show what would be deleted, do not delete
   --print, -p             Print each target before deleting it
   --analyze, -a           Report-only: show biggest space consumers in
                           your HOME, plus total/used/available disk space
                           on the filesystem behind \$HOME. Deletes
                           nothing. Combine with another option (e.g.
-                          --analyze -d) to see the report before that
+                          --analyze -s) to see the report before that
                           option runs.
   --only, -o CATEGORY     Run only one category:
                           general | python | vscode | chrome |
                           firefox | brave | discord | spotify | zen
-  --extreme, -e           DANGEROUS. Fully wipe the entire local data
-                          dir of one or more apps. See EXTREME MODE
+  --wipe, -w              DANGEROUS. Fully wipe the entire local data
+                          dir of one or more apps. See WIPE MODE
                           below. Always asks for confirmation per app
                           unless --yes is also given.
-  --firefox               With --extreme: target Firefox
-  --brave                 With --extreme: target Brave
-  --discord               With --extreme: target Discord
-  --spotify               With --extreme: target Spotify
-  --zen                   With --extreme: target Zen Browser
-  --chrome                With --extreme: target Chrome
-  --vscode                With --extreme: target VS Code
+  --firefox               With --wipe: target Firefox
+  --brave                 With --wipe: target Brave
+  --discord               With --wipe: target Discord
+  --spotify               With --wipe: target Spotify
+  --zen                   With --wipe: target Zen Browser
+  --chrome                With --wipe: target Chrome
+  --vscode                With --wipe: target VS Code
   --yes, -y               Auto-confirm extreme-wipe prompts (see
-                          EXTREME MODE below)
+                          WIPE MODE below)
   --help, -h              Show this help
 
 APP CACHE CATEGORIES (safe, part of the default clean):
@@ -280,47 +281,47 @@ APP CACHE CATEGORIES (safe, part of the default clean):
   extension settings/storage are never touched by these. They run as
   part of the default clean, and can also be targeted directly:
     --only firefox / -o zen / etc.     clean just that one app's cache
-    --dry-run, -dr                     show what would be cleaned,
+    --safe-dry-run, -sdr                     show what would be cleaned,
                                        nothing deleted
 
-EXTREME MODE (--extreme, -e): DANGEROUS, OPT-IN, PER-APP
+WIPE MODE (--wipe, -w): DANGEROUS, OPT-IN, PER-APP
   This is the ONLY stage that deletes more than a cache: it removes an
   app's entire local data directory, including (for browsers) history,
   saved logins, passwords, active sessions, and (for VS Code) settings,
   keybindings, snippets, and installed extensions. It NEVER runs as
-  part of the default clean and NEVER runs unless you pass --extreme/-e
+  part of the default clean and NEVER runs unless you pass --wipe/-w
   explicitly. It only ever deletes data — it never uninstalls the app
   itself; the app stays installed.
 
   Pick which app(s) to wipe with --firefox / --brave / --discord /
   --spotify / --zen / --chrome / --vscode. You can combine several. If
-  --extreme is given with NONE of those app flags, it wipes ALL SEVEN
+  --wipe is given with NONE of those app flags, it wipes ALL SEVEN
   supported apps (the old "purge everything" behavior) — so be careful
-  with --extreme --yes on its own.
+  with --wipe --yes on its own.
 
   Each targeted app shows its size and asks for an interactive y/N
   confirmation before it is wiped, unless --yes / -y is also given.
-  --dry-run / -dr shows what extreme mode would remove, with no prompts
+  --safe-dry-run / -sdr shows what wipe mode would remove, with no prompts
   and nothing deleted.
 
-Default run (--default / -d, or any standalone flag with no --only or
---extreme): general + python + vscode + chrome + firefox + brave +
+Default run (--safe / -s, or any standalone flag with no --only or
+--wipe): general + python + vscode + chrome + firefox + brave +
 discord + spotify + zen caches + misc caches (all safe).
 
 Examples:
   $SCRIPT_NAME
-  $SCRIPT_NAME --default
-  $SCRIPT_NAME --dry-run
-  $SCRIPT_NAME -dr
+  $SCRIPT_NAME --safe
+  $SCRIPT_NAME --safe-dry-run
+  $SCRIPT_NAME -sdr
   $SCRIPT_NAME --analyze
-  $SCRIPT_NAME -a -d
+  $SCRIPT_NAME -a -s
   $SCRIPT_NAME --only vscode
   $SCRIPT_NAME -o zen
-  $SCRIPT_NAME --extreme --brave
-  $SCRIPT_NAME -e --discord
-  $SCRIPT_NAME --extreme --brave --discord --zen
-  $SCRIPT_NAME --extreme --chrome --vscode
-  $SCRIPT_NAME --extreme --yes        # wipes ALL supported apps, no prompts
+  $SCRIPT_NAME --wipe --brave
+  $SCRIPT_NAME -w --discord
+  $SCRIPT_NAME --wipe --brave --discord --zen
+  $SCRIPT_NAME --wipe --chrome --vscode
+  $SCRIPT_NAME --wipe --yes        # wipes ALL supported apps, no prompts
 EOF
 }
 
@@ -335,11 +336,11 @@ fi
 
 while [ $# -gt 0 ]; do
 	case "$1" in
-		--default|-d)
+		--safe|-s)
 			DEFAULT_RUN=1
 			ANY_OPTION_SET=1
 			;;
-		--dry-run|-dr)
+		--safe-dry-run|-sdr)
 			DRY_RUN=1
 			ANY_OPTION_SET=1
 			;;
@@ -361,7 +362,7 @@ while [ $# -gt 0 ]; do
 			ONLY_CATEGORY="$1"
 			ANY_OPTION_SET=1
 			;;
-		--extreme|--extreem|-extreme|-extreem|-e)
+		--wipe|--extreem|-wipe|-extreem|-w)
 			EXTREME=1
 			EXTREME_ONLY=1
 			ANY_OPTION_SET=1
@@ -422,16 +423,16 @@ case "$ONLY_CATEGORY" in
 esac
 
 # --firefox/--brave/--discord/--spotify/--zen/--chrome/--vscode only
-# make sense alongside --extreme.
+# make sense alongside --wipe.
 if [ "$EXTREME" -ne 1 ] && { [ "$EXTREME_FIREFOX" -eq 1 ] \
 	|| [ "$EXTREME_BRAVE" -eq 1 ] || [ "$EXTREME_DISCORD" -eq 1 ] || [ "$EXTREME_SPOTIFY" -eq 1 ] \
 	|| [ "$EXTREME_ZEN" -eq 1 ] || [ "$EXTREME_CHROME" -eq 1 ] || [ "$EXTREME_VSCODE" -eq 1 ]; }; then
-	echo -e "${C_RED}--firefox/--brave/--discord/--spotify/--zen/--chrome/--vscode require --extreme${C_RESET}"
+	echo -e "${C_RED}--firefox/--brave/--discord/--spotify/--zen/--chrome/--vscode require --wipe${C_RESET}"
 	usage
 	exit 1
 fi
 
-# If --extreme was combined with --default/-d, it's no longer an
+# If --wipe was combined with --safe/-s, it's no longer an
 # extreme-only run: run the full safe clean AND the extreme wipe.
 if [ "$DEFAULT_RUN" -eq 1 ] && [ "$EXTREME" -eq 1 ]; then
 	EXTREME_ONLY=0
@@ -630,7 +631,7 @@ extreme_wipe_app_dir() {
 	[ -z "$bytes" ] && bytes=0
 	[ "$bytes" -eq 0 ] && return 0
 
-	echo -e "${C_RED}\n[EXTREME] About to fully wipe ${app_name} (history, logins, sessions, everything):${C_RESET}"
+	echo -e "${C_RED}\n[WIPE] About to fully wipe ${app_name} (history, logins, sessions, everything):${C_RESET}"
 	echo "  $app_path"
 	echo "  Size: $(human_size "$bytes")"
 
@@ -643,7 +644,7 @@ extreme_wipe_app_dir() {
 	add_found_bytes "$bytes"
 
 	if [ "$PRINT_ITEMS" -eq 1 ] || [ "$DRY_RUN" -eq 1 ]; then
-		print_item "EXTREME WIPE $app_name" "$bytes"
+		print_item "WIPE $app_name" "$bytes"
 	fi
 
 	if [ "$DRY_RUN" -eq 1 ]; then
@@ -1199,9 +1200,9 @@ clean_extreme() {
 	[ "$EXTREME_CHROME" -eq 1 ]  && any_app_flag=1
 	[ "$EXTREME_VSCODE" -eq 1 ]  && any_app_flag=1
 
-	echo -e "${C_RED}-- [extreme] FULL data wipe (profiles/history/logins/sessions/settings) --${C_RESET}"
+	echo -e "${C_RED}-- [wipe] FULL data wipe (profiles/history/logins/sessions/settings) --${C_RESET}"
 
-	# No app flag given alongside --extreme: fall back to wiping every
+	# No app flag given alongside --wipe: fall back to wiping every
 	# supported app (old "purge everything" behavior), still one
 	# confirmation prompt per app.
 	if [ "$any_app_flag" -eq 0 ]; then
@@ -1212,7 +1213,7 @@ clean_extreme() {
 		EXTREME_ZEN=1
 		EXTREME_CHROME=1
 		EXTREME_VSCODE=1
-		echo -e "${C_YELLOW}No app flag given with --extreme: targeting all supported apps (firefox, brave, discord, spotify, zen, chrome, vscode).${C_RESET}"
+		echo -e "${C_YELLOW}No app flag given with --wipe: targeting all supported apps (firefox, brave, discord, spotify, zen, chrome, vscode).${C_RESET}"
 	fi
 
 	if [ "$EXTREME_FIREFOX" -eq 1 ]; then
@@ -1334,7 +1335,7 @@ if [ "$ANALYZE" -eq 1 ]; then
 fi
 
 if [ "$ANY_OPTION_SET" -ne 1 ]; then
-	echo -e "${C_YELLOW}No action specified. Use --default/-d to run the full clean, or --help for options.${C_RESET}"
+	echo -e "${C_YELLOW}No action specified. Use --safe/-s to run the full clean, or --help for options.${C_RESET}"
 	exit 0
 fi
 
@@ -1354,11 +1355,11 @@ echo -e "${C_RED}\n -- Cleaning ...\n${C_RESET}"
 if [ -n "$ONLY_CATEGORY" ]; then
 	run_only_category
 elif [ "$EXTREME_ONLY" -eq 1 ]; then
-	# --extreme on its own (no --default/-d): run ONLY the extreme wipe,
+	# --wipe on its own (no --safe/-s): run ONLY the extreme wipe,
 	# nothing else gets touched.
 	run_extreme
 elif [ "$EXTREME" -eq 1 ]; then
-	# --extreme combined with --default/-d: run the full safe clean,
+	# --wipe combined with --safe/-s: run the full safe clean,
 	# then also run the extreme wipe.
 	run_default_clean
 	run_extreme
