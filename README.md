@@ -1,5 +1,3 @@
-<div align="center">
-
 ```text id="cph6di"
 ███╗   ███╗ █████╗  ██████╗ ██╗ ██████╗
 ████╗ ████║██╔══██╗██╔════╝ ██║██╔════╝
@@ -15,6 +13,8 @@
 ╚██████╗███████╗███████╗██║  ██║██║ ╚████║███████╗██║  ██║
  ╚═════╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝
 ```
+
+<div align="center">
 
 [![Shell](https://img.shields.io/badge/Shell-Bash-121011?style=for-the-badge\&logo=gnubash\&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Platform](https://img.shields.io/badge/Platform-1337_Ubuntu%20%2F%20Linux-E95420?style=for-the-badge\&logo=ubuntu\&logoColor=white)](.)
