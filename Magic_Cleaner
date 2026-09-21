@@ -199,27 +199,30 @@ banner() {
 	local G6="\033[38;5;159m"
 	local DIM="\033[2m"
 
-	local art=(
-"███╗   ███╗ █████╗  ██████╗ ██╗ ██████╗     ██████╗██╗     ███████╗ █████╗ ███╗   ██╗███████╗██████╗ "
-"████╗ ████║██╔══██╗██╔════╝ ██║██╔════╝    ██╔════╝██║     ██╔════╝██╔══██╗████╗  ██║██╔════╝██╔══██╗"
-"██╔████╔██║███████║██║  ███╗██║██║         ██║     ██║     █████╗  ███████║██╔██╗ ██║█████╗  ██████╔╝"
-"██║╚██╔╝██║██╔══██║██║   ██║██║██║         ██║     ██║     ██╔══╝  ██╔══██║██║╚██╗██║██╔══╝  ██╔══██╗"
-"██║ ╚═╝ ██║██║  ██║╚██████╔╝██║╚██████╗    ╚██████╗███████╗███████╗██║  ██║██║ ╚████║███████╗██║  ██║"
-"╚═╝     ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝ ╚═════╝     ╚═════╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝"
-	)
+	#        M         A       G       I       C       _     C       L       E       A       N       E       R
+	local r1=("██▄ ▄██" "▄▀▀▀▄" "▄▀▀▀▀" "▀▀█▀▀" "▄▀▀▀▀" "  " "▄▀▀▀▀" "█    " "█▀▀▀▀" "▄▀▀▀▄" "█▄  █" "█▀▀▀▀" "█▀▀▀▄")
+	local r2=("█ ▀█▀ █" "█▀▀▀█" "█  ▀█" "  █  " "█    " "  " "█    " "█    " "█▀▀▀ " "█▀▀▀█" "█ ▀▄█" "█▀▀▀ " "█▀▀█▀")
+	local r3=("█     █" "█   █" "▀▄▄▄▀" "▄▄█▄▄" "▀▄▄▄▄" "  " "▀▄▄▄▄" "█▄▄▄▄" "█▄▄▄▄" "█   █" "█   █" "█▄▄▄▄" "█  ▀▄")
 
 	local colors=("$G1" "$G2" "$G3" "$G4" "$G5" "$G6")
-	local subtitle="✦  Disk-space sorcery for 1337 Ubuntu PCs  ✦"
-	local credits="Made by Bilal Rouane  ·  42 intra: brouane"
-	local i
+	local subtitle="✦ Disk-space sorcery for 1337 Ubuntu PCs ✦"
+	local credits="Made by Bilal Rouane · 42 intra: brouane"
+	local l1="" l2="" l3="" c i
+
+	for i in "${!r1[@]}"; do
+		c="${colors[i * ${#colors[@]} / ${#r1[@]}]}"
+		l1+="${c}${r1[i]} "
+		l2+="${c}${r2[i]} "
+		l3+="${c}${r3[i]} "
+	done
 
 	echo
-	for i in "${!art[@]}"; do
-		printf "  %b\n" "${colors[i]}${C_BOLD}${art[i]}${C_RESET}"
-	done
+	printf "  %b\n" "${C_BOLD}${l1}${C_RESET}"
+	printf "  %b\n" "${C_BOLD}${l2}${C_RESET}"
+	printf "  %b\n" "${C_BOLD}${l3}${C_RESET}"
 	echo
-	printf "  %b\n" "${G6}${C_BOLD}$(printf "$subtitle")${C_RESET}"
-	printf "  %b\n" "${DIM}$(printf "$credits")${C_RESET}"
+	printf "  %b\n" "${G6}${C_BOLD}${subtitle}${C_RESET}"
+	printf "  %b\n" "${DIM}${credits}${C_RESET}"
 	echo
 
 	if [ "$DRY_RUN" -eq 1 ]; then
