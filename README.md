@@ -1,30 +1,25 @@
-```text id="cph6di"
-███╗   ███╗ █████╗  ██████╗ ██╗ ██████╗
-████╗ ████║██╔══██╗██╔════╝ ██║██╔════╝
-██╔████╔██║███████║██║  ███╗██║██║
-██║╚██╔╝██║██╔══██║██║   ██║██║██║
-██║ ╚═╝ ██║██║  ██║╚██████╔╝██║╚██████╗
-╚═╝     ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝ ╚═════╝
-
- ██████╗██╗     ███████╗ █████╗ ███╗   ██╗███████╗██████╗
-██╔════╝██║     ██╔════╝██╔══██╗████╗  ██║██╔════╝██╔══██╗
-██║     ██║     █████╗  ███████║██╔██╗ ██║█████╗  ██████╔╝
-██║     ██║     ██╔══╝  ██╔══██║██║╚██╗██║██╔══╝  ██╔══██╗
-╚██████╗███████╗███████╗██║  ██║██║ ╚████║███████╗██║  ██║
- ╚═════╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝
+```text
+██╗  ██╗██╗     ███████╗███████╗███╗   ██╗███████╗██╗  ██╗
+██║ ██╔╝██║     ██╔════╝██╔════╝████╗  ██║██╔════╝╚██╗██╔╝
+█████╔╝ ██║     █████╗  █████╗  ██╔██╗ ██║█████╗   ╚███╔╝
+██╔═██╗ ██║     ██╔══╝  ██╔══╝  ██║╚██╗██║██╔══╝   ██╔██╗
+██║  ██╗███████╗███████╗███████╗██║ ╚████║███████╗██╔╝ ██╗
+╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝
 ```
 
 <div align="center">
 
 [![Shell](https://img.shields.io/badge/Shell-Bash-121011?style=for-the-badge\&logo=gnubash\&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Platform](https://img.shields.io/badge/Platform-1337_Ubuntu%20%2F%20Linux-E95420?style=for-the-badge\&logo=ubuntu\&logoColor=white)](.)
-[![Type](https://img.shields.io/badge/Type-Cleanup%20Utility-8A2BE2?style=for-the-badge)](.)
+[![Type](https://img.shields.io/badge/Type-Cleanup%20Utility-1E90FF?style=for-the-badge)](.)
 [![Status](https://img.shields.io/badge/Status-Finished-success?style=for-the-badge)](.)
 [![Mode](https://img.shields.io/badge/Mode-Dry--Run%20Support-gold?style=for-the-badge)](.)
 
 </div>
 
-# Magic_Cleaner
+# Kleenex
+
+> *Wipe away the clutter.*
 
 Disk-space cleanup script for **1337/42 Ubuntu PCs**. Made by Bilal Rouane (42 intra: `brouane`).
 
@@ -33,15 +28,15 @@ Clears out caches, junk, and trash across your `$HOME` with category-based clean
 ## Clone & setup
 
 ```bash
-git clone https://github.com/RowanSe7en/004_PERSONAL_Magic_Cleaner
-cd 004_PERSONAL_Magic_Cleaner
-chmod +x Magic_Cleaner
+git clone https://github.com/RowanSe7en/04P_Kleenex
+cd 04P_Kleenex
+chmod +x kleenex
 ```
 
 Show usage:
 
 ```bash
-./Magic_Cleaner
+./kleenex
 ```
 
 *(running with no arguments shows the same thing as `--help`)*
@@ -49,7 +44,7 @@ Show usage:
 Run the full default safe clean:
 
 ```bash
-./Magic_Cleaner --safe
+./kleenex --safe
 ```
 
 ## Options
@@ -79,19 +74,19 @@ Every flag works **standalone** — none of them need `--safe`/`-s` to do someth
 ### Examples
 
 ```bash
-./Magic_Cleaner                        # no args: shows usage/help, does nothing
-./Magic_Cleaner --safe                 # full safe clean
-./Magic_Cleaner --safe-dry-run         # preview everything, delete nothing
-./Magic_Cleaner -sdr                   # same as --safe-dry-run
-./Magic_Cleaner --analyze              # report biggest space hogs, exit — nothing deleted
-./Magic_Cleaner -a -s                  # report space hogs, then run the full safe clean
-./Magic_Cleaner --only vscode          # clean only VS Code
-./Magic_Cleaner -o zen                 # clean only Zen Browser's cache
-./Magic_Cleaner --wipe --brave         # DANGEROUS: fully wipe Brave's entire profile
-./Magic_Cleaner -w --discord           # DANGEROUS: fully wipe Discord's entire profile
-./Magic_Cleaner --wipe --brave --discord --zen   # wipe all three
-./Magic_Cleaner --wipe --chrome --vscode         # wipe Chrome and VS Code
-./Magic_Cleaner --wipe --yes           # DANGEROUS: wipe ALL 7 supported apps, no prompts
+./kleenex                        # no args: shows usage/help, does nothing
+./kleenex --safe                 # full safe clean
+./kleenex --safe-dry-run         # preview everything, delete nothing
+./kleenex -sdr                   # same as --safe-dry-run
+./kleenex --analyze              # report biggest space hogs, exit — nothing deleted
+./kleenex -a -s                  # report space hogs, then run the full safe clean
+./kleenex --only vscode          # clean only VS Code
+./kleenex -o zen                 # clean only Zen Browser's cache
+./kleenex --wipe --brave         # DANGEROUS: fully wipe Brave's entire profile
+./kleenex -w --discord           # DANGEROUS: fully wipe Discord's entire profile
+./kleenex --wipe --brave --discord --zen   # wipe all three
+./kleenex --wipe --chrome --vscode         # wipe Chrome and VS Code
+./kleenex --wipe --yes           # DANGEROUS: wipe ALL 7 supported apps, no prompts
 ```
 
 ## Modes
@@ -107,11 +102,11 @@ Every flag works **standalone** — none of them need `--safe`/`-s` to do someth
 ### Mixing flags
 
 ```bash
-./Magic_Cleaner -s -p                          # safe clean, print every target
-./Magic_Cleaner --only firefox --safe-dry-run  # preview Firefox cache cleanup only
-./Magic_Cleaner -a --only chrome               # disk report, then clean Chrome only
-./Magic_Cleaner -s --wipe --brave              # safe clean first, then wipe Brave
-./Magic_Cleaner --wipe --spotify -sdr          # preview what a Spotify wipe would remove
+./kleenex -s -p                          # safe clean, print every target
+./kleenex --only firefox --safe-dry-run  # preview Firefox cache cleanup only
+./kleenex -a --only chrome               # disk report, then clean Chrome only
+./kleenex -s --wipe --brave              # safe clean first, then wipe Brave
+./kleenex --wipe --spotify -sdr          # preview what a Spotify wipe would remove
 ```
 
 Rules of thumb when mixing:
@@ -124,6 +119,29 @@ Rules of thumb when mixing:
 - **`--yes`/`-y`** only matters for `--wipe` confirmation prompts. It's irrelevant if `--wipe` isn't running.
 - **`--safe-dry-run`/`-sdr`** makes `--yes`/`-y` moot: dry-run never prompts and never deletes, with or without `--yes`.
 - **`--analyze`/`-a`** combined with any other flag still runs that other flag; it only exits early when it's the *sole* flag given.
+
+## Reading the output
+
+Every category prints the same way, so a run is easy to scan:
+
+```text
+  ▌ Chrome       SAFE    Caches & temp data  (logins, history & settings untouched)
+    ◦    1.9M  Flatpak cache                  ~/.var/app/com.google.Chrome/cache/blob
+    ◦  488.2K  Cache                          ~/.var/app/com.google.Chrome/config/google-chrome/Default/Cache/c1
+    ◦ 2 items · 2.4M would be freed
+
+  ▌ Brave        SAFE    Caches & temp data  (logins, history & settings untouched)
+    ↷ Not found (Flatpak) — skipped
+```
+
+- **Header:** `▌ Name  MODE  what it cleans`. The mode tag is `SAFE` (cache/junk only), `MEDIUM` (VS Code, which also clears editor history) or `WIPE` (full data wipe).
+- **Item lines** (shown with `--print` or `--safe-dry-run`): `icon  size  label  path`, with `~` standing in for `$HOME`. `✔` means removed, `◦` means "would be removed" (dry-run).
+- **Subtotal:** every category ends with `✔ N items · SIZE freed` (or `◦ … would be freed` in a dry-run), or `✔ Already clean` when there was nothing to remove.
+- **Skips:** an app that isn't installed prints `↷ Not found (Flatpak) — skipped` instead of silently disappearing.
+- **Summary table:** found vs. freed per category (`Would free` in a dry-run), a total row and the number of targets touched. The `Wipe` row only appears when `--wipe` ran.
+- **Storage:** available space before and after, plus the real disk delta on non-dry-run runs.
+
+Colors use a blue accent (green = ok, amber = caution, red = danger). They switch off automatically when the output isn't a terminal (for example when piped to a file), or when `NO_COLOR` is set. Set `FORCE_COLOR=1` to keep them in a pipe.
 
 ## What `--safe` / `-s` cleans
 
@@ -257,13 +275,15 @@ Zen Browser is Firefox-based (Gecko engine), so the layout mirrors Firefox exact
 
 Combine as many app flags as you like: `--wipe --brave --discord --zen`. If you pass `--wipe` with **no app flag**, it targets all seven apps — the script prints a warning before doing so.
 
-Before wiping each app, the script shows its size and asks for confirmation:
+Before wiping each app, the script shows its path and size and asks for confirmation. Apps that aren't installed are skipped with a note, and a declined app prints `↷ Skipped <app>`:
 
 ```
-[WIPE] About to fully wipe Brave (history, logins, sessions, everything):
-  /home/you/.var/app/com.brave.Browser
-  Size: 1.2G
-Continue? [y/N]
+  ▌ Wipe         WIPE    Full data wipe  (profiles, history, logins, sessions & settings)
+
+    ⚠ Brave  wipes history, logins, sessions, everything
+      Path   ~/.var/app/com.brave.Browser
+      Size   1.2G
+    ? Wipe Brave? [y/N]
 ```
 
 ### Flags that affect `--wipe`
@@ -288,3 +308,4 @@ Continue? [y/N]
 - `--safe-dry-run`/`-sdr` walks the full selected scope and reports sizes without calling `rm` anywhere, and skips all wipe confirmation prompts.
 - `--analyze`/`-a` never deletes anything — it only reads and reports.
 - A per-category summary (found vs. freed for `general`, `python`, `vscode`, `chrome`, `firefox`, `brave`, `discord`, `spotify`, `zen`, and `wipe`) is printed at the end of every run, along with available storage before and after, and the actual disk-space delta on real (non-dry-run) runs.
+- **Accurate dry-runs:** a dry-run never counts the same bytes twice (for example a `.pyc` inside a `__pycache__` that was already counted), so "would free" matches what a real run frees.
